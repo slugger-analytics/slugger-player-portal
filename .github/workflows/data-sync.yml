@@ -1,0 +1,19 @@
+# PURPOSE: Placeholder GitHub Action for scheduled Cron triggers hitting /api/sync/tbc and /api/sync/mlb-feed.
+name: Data sync
+
+on:
+  schedule:
+    # Run TBC and MLB/Indie feed sync on a schedule (e.g. every 6–12h)
+    # - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      # - Checkout repo
+      # - Optional: deploy or trigger Vercel cron
+      # - POST to /api/sync/tbc with CRON_SECRET header
+      # - POST to /api/sync/mlb-feed with CRON_SECRET header
+      - name: Placeholder
+        run: echo "Add steps to call your deployment's /api/sync/tbc and /api/sync/mlb-feed with auth"
