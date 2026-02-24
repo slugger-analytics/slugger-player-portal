@@ -1,0 +1,96 @@
+// PURPOSE: Prisma schema — models with commented field placeholders for Available Player Portal.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  Manager
+  Analyst
+  Player
+  Agent
+}
+
+// User — with role enum (Manager, Analyst, Player, Agent)
+model User {
+  id        String   @id @default(cuid())
+  email     String?
+  name      String?
+  role      UserRole?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Player — core player identity and current status
+model Player {
+  id            String   @id @default(cuid())
+  externalId    String?
+  name          String?
+  position      String?
+  currentStatus String?
+  team          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  transactions Transaction[]
+  // PriorityListEntry[], ScoutingNote[]
+}
+
+// Transaction — release/signing events with raw and normalized timestamps
+model Transaction {
+  id                  String   @id @default(cuid())
+  playerId            String?
+  type                String?
+  rawTimestamp        DateTime?
+  normalizedTimestamp DateTime?
+  source              String?
+  createdAt           DateTime @default(now())
+  player              Player?  @relation(fields: [playerId], references: [id])
+}
+
+// PriorityList — team-specific ordered target lists
+model PriorityList {
+  id        String   @id @default(cuid())
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  // userId/teamId, entries (PriorityListEntry[])
+}
+
+// PriorityListEntry — join table linking Players to PriorityLists with rank
+model PriorityListEntry {
+  id     String @id @default(cuid())
+  rank   Int?
+  // priorityListId, playerId
+}
+
+// ScoutingNote — private notes attached to a Player by a User
+model ScoutingNote {
+  id        String   @id @default(cuid())
+  content   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  // playerId, userId
+}
+
+// AlertRule — user-configured notification triggers (position, status, team filters)
+model AlertRule {
+  id        String   @id @default(cuid())
+  position  String?
+  status    String?
+  team      String?
+  createdAt DateTime @default(now())
+  // userId, email/push preferences
+}
+
+// PlayerSubmission — self-submitted profiles from Players or Agents
+model PlayerSubmission {
+  id        String   @id @default(cuid())
+  status    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  // userId (Player or Agent), playerData (JSON or relations)
+}
