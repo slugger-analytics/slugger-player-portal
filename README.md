@@ -1,30 +1,13 @@
 # Available Player Portal
 
-Production-ready scaffold for a **real-time recruitment command center** for Atlantic League baseball teams. The app addresses a 24–48 hour signing window where coaches must identify, evaluate, and contact released players before competitors. A key data concern is the **"Mexico Delay"** — timezone-related reporting gaps from independent leagues that are normalized before display.
+Dedicated tool for player discovery
+Enhances SLUGGER, the Atlantic League of Professional Baseball’s analytics platform
+Introduces a widget for identifying professional baseball players
+Centralizes information on available players near MLB level
+Provides a searchable, league-specific interface for player discovery (specifically players leaving/available from the Major League)
+Supports coaches, league staff, and decision-makers in roster planning
+Improves efficiency and enables data-driven recruiting decisions
 
-## Project overview
-
-The system serves three user types:
-
-| Role | Needs | Primary entry |
-|------|--------|----------------|
-| **Managers / Coaches** | Real-time dashboard, priority lists, configurable alerts | `/dashboard` |
-| **Analysts / Scouts** | Deep statistical comparison tools, exportable data | `/player/compare` |
-| **Players / Agents** | Self-submission portal to upload profile for scouting | `/profile/submit` |
-
-## Environment variables
-
-| Variable | Purpose |
-|----------|---------|
-| `DATABASE_URL` | PostgreSQL connection string (used by Prisma) |
-| `TBC_API_KEY` | Baseball Cube API key for `/api/sync/tbc` |
-| `MLB_FEED_URL` | MLB transaction / RSS feed URL |
-| `INDIE_LEAGUE_FEED_URL` | Independent league transaction feed URL |
-| `SMTP_HOST` | SMTP host for email notifications |
-| `SMTP_USER` | SMTP username |
-| `SMTP_PASS` | SMTP password |
-| `NEXTAUTH_SECRET` | Secret for session/auth (if using NextAuth) |
-| `CRON_SECRET` | Secret for securing cron-triggered sync routes |
 
 ## How to run Cron sync jobs locally
 
@@ -49,8 +32,3 @@ Ensure `CRON_SECRET` is set in `.env` and your API routes verify it before runni
 - **Prisma** + PostgreSQL
 - **Lucide React** for all icons
 - Data-fetching in **Server Components** where possible; **Client Components** only for interactivity (filters, drag-and-drop, notification settings)
-
-## Role-based access
-
-- **RoleGuard** wraps routes that restrict access by `UserRole`.
-- **Middleware** redirects authenticated users by role: Manager → `/dashboard`, Analyst → `/player/compare`, Player/Agent → `/profile/submit`.
