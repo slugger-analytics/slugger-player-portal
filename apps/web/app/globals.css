@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Global defaults for the Player Portal.
+ * Prefer Tailwind `portal-*` theme tokens in components; variables mirror them for
+ * rare inline/CSS needs and documentation.
+ */
+:root {
+  --portal-page: #dce4ee;
+  --portal-accent: #6b8fb5;
+  --portal-sidebar: #f5f5f5;
+  --portal-filter-bg: #fafafe;
+  --portal-filter-border: #c5cae9;
+  --portal-panel: #eeeeee;
+}
+
+body {
+  margin: 0;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+}
+
+@layer components {
+  /** Primary actions — Save, confirm — matches steel blue accent bar */
+  .portal-btn-primary {
+    @apply rounded-portal-sm bg-portal-accent px-4 py-2 text-sm font-medium text-white shadow-portal-card transition hover:bg-portal-accent-hover;
+  }
+  /** Secondary / ghost */
+  .portal-btn-ghost {
+    @apply rounded-portal-sm px-4 py-2 text-sm text-neutral-700 transition hover:bg-neutral-100;
+  }
+  /** White surface card inside gray panels */
+  .portal-surface {
+    @apply rounded-portal border border-neutral-200/80 bg-white shadow-portal-card;
+  }
+  /** Lavender filter container */
+  .portal-filter-shell {
+    @apply rounded-portal border-2 border-portal-filter-border bg-portal-filter-bg p-3 sm:p-4;
+  }
+  /** Gray results / content well */
+  .portal-panel-well {
+    @apply rounded-portal-lg bg-portal-panel p-3 shadow-inner sm:p-4;
+  }
+}

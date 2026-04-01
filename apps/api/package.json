@@ -1,0 +1,32 @@
+{
+  "name": "@available-player-portal/api",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:generate": "node scripts/prisma-with-env.cjs generate",
+    "db:push": "node scripts/prisma-with-env.cjs db push",
+    "db:migrate": "node scripts/prisma-with-env.cjs migrate dev",
+    "sync": "tsx src/jobs/syncPipeline.ts",
+    "sync:ts-node": "ts-node --transpile-only src/jobs/syncPipeline.ts",
+    "lint": "echo \"no linter configured\""
+  },
+  "dependencies": {
+    "@available-player-portal/shared": "*",
+    "@prisma/client": "^6.19.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.13.10",
+    "prisma": "^6.19.2",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
