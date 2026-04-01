@@ -7,6 +7,8 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import type { BattingStats, PitchingStats } from "@available-player-portal/shared"
 import { TransactionHistoryView } from "@/components/discovery/TransactionHistoryView"
+import { PlayerDetailFavoriteBar } from "@/components/favorites/PlayerDetailFavoriteBar"
+import { PlayerHistoryTracker } from "@/components/history/PlayerHistoryTracker"
 import { fetchPlayerProfile } from "@/lib/api"
 
 type Props = { params: Promise<{ id: string }> }
@@ -32,6 +34,9 @@ export default async function PlayerDetailPage({ params }: Props) {
           ← Back to Player Discovery Home
         </Link>
       </div>
+
+      <PlayerDetailFavoriteBar playerId={p.id} playerName={p.name} />
+      <PlayerHistoryTracker playerId={p.id} playerName={p.name} position={p.position} team={p.team} />
 
       <header className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-black">{p.name}</h1>

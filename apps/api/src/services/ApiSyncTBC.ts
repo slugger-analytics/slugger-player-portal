@@ -33,6 +33,7 @@ export class ApiSyncTBC {
     const res = await fetch(url, {
       headers: { Accept: "text/plain,text/html,*/*" },
       redirect: "follow",
+      signal: AbortSignal.timeout(180_000),
     })
     if (!res.ok) {
       throw new Error(`GET ${url} failed: ${res.status} ${res.statusText}`)

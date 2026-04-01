@@ -3,7 +3,7 @@
  * @description Express **HTTP entry point** for `@available-player-portal/api`.
  *
  * **Responsibilities:**
- * - Load env (via `dotenv/config`)
+ * - Load env (via `./config` → `loadDotenv()`)
  * - Enable CORS for local Next.js (`localhost:3000`) and configured origins
  * - Mount `GET /health` for orchestration probes
  * - Mount Player Discovery API at `/players`
@@ -13,12 +13,11 @@
  * **Usage:** `npm run dev` (tsx watch) or `npm run build && npm start` after `tsc`.
  */
 
-import "dotenv/config"
 import cors from "cors"
 import express from "express"
-import { config } from "./config"
 import { createPlayerRouter } from "./api/PlayerAPI"
 import { createSyncRouter } from "./api/syncApi"
+import { config } from "./config"
 import { prisma } from "./lib/prisma"
 
 const app = express()

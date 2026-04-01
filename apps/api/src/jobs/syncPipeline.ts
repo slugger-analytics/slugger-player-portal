@@ -13,8 +13,11 @@
  * - CLI: `npm run sync` (tsx) or `npm run sync:ts-node` from `apps/api`
  * - Cron: same command with `DATABASE_URL` and `TBC_FEED_PASSWORD` in the environment
  *
- * **Module entry:** `if (require.main === module)` runs the pipeline and exits the process.
+ * **Module entry:** When this file is the process entry (CLI), runs the pipeline and exits.
+ * Uses `argv`/`__filename` match because `require.main === module` is unreliable under `tsx`.
  */
+
+import path from "node:path"
 
 import { config } from "../config"
 import { ApiSyncTBC } from "../services/ApiSyncTBC"
@@ -108,7 +111,21 @@ export async function runSyncPipeline(): Promise<SyncPipelineResult> {
   return result
 }
 
-if (require.main === module) {
+/** True when this file is the CLI entry (`tsx …/syncPipeline.ts` or `node …/syncPipeline.js`). */
+function isSyncCliMain(): boolean {
+  const thisFile = path.resolve(__filename)
+  for (const arg of process.argv.slice(1)) {
+    if (!arg || arg.startsWith("-")) continue
+    try {
+      if (path.resolve(arg) === thisFile) return true
+    } catch {
+      // ignore invalid paths
+    }
+  }
+  return false
+}
+
+if (isSyncCliMain()) {
   runSyncPipeline()
     .then(() => process.exit(0))
     .catch((err) => {

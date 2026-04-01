@@ -9,6 +9,7 @@
 import Image from "next/image"
 import Link from "next/link"
 import type { PlayerSummary } from "@available-player-portal/shared"
+import { FavoriteHeartButton } from "@/components/favorites/FavoriteHeartButton"
 
 type Props = {
   player: PlayerSummary
@@ -20,8 +21,11 @@ export function PlayerCard({ player }: Props) {
   return (
     <Link
       href={`/players/${encodeURIComponent(player.id)}`}
-      className="group flex max-w-[240px] shrink-0 gap-3 rounded-portal border border-white/80 bg-white p-3 shadow-portal-card transition hover:border-portal-filter-border hover:shadow-portal"
+      className="group relative flex max-w-[240px] shrink-0 gap-3 rounded-portal border border-white/80 bg-white p-3 shadow-portal-card transition hover:border-portal-filter-border hover:shadow-portal"
     >
+      <div className="absolute right-1 top-1 z-10">
+        <FavoriteHeartButton playerId={player.id} />
+      </div>
       <div className="relative h-[88px] w-[88px] shrink-0 overflow-hidden rounded-full border border-neutral-100 bg-neutral-50 shadow-sm">
         <Image
           src={src}
