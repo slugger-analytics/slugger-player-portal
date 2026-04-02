@@ -15,19 +15,23 @@ import type { Player, PlayerFilters } from "../types/models"
 import { prisma } from "../lib/prisma"
 
 export class PlayerRepository {
-  /** Applies optional `position`, `status`, `team`, `ageMin`/`ageMax` query semantics. */
-  async getPlayers(filters: PlayerFilters): Promise<Player[]> {
+  /** Shared `where` for `findMany` / `count` (does not use `limit` / `offset`). */
+  private playerWhereFromFilters(filters: PlayerFilters): Prisma.PlayerWhereInput {
     const where: Prisma.PlayerWhereInput = {}
     if (filters.position) {
-      const fp = filters.position.toLowerCase()
-      if (fp.includes("pitch")) {
-        where.OR = [
-          { position: { contains: "Pitch", mode: "insensitive" } },
-          { position: { equals: "p", mode: "insensitive" } },
-          { position: { startsWith: "p-", mode: "insensitive" } },
-        ]
+      const raw = filters.position.trim()
+      const fp = raw.toLowerCase()
+      const pitcherMatch: Prisma.PlayerWhereInput[] = [
+        { position: { contains: "Pitch", mode: "insensitive" } },
+        { position: { equals: "p", mode: "insensitive" } },
+        { position: { startsWith: "p-", mode: "insensitive" } },
+      ]
+      if (fp === "non-p") {
+        where.NOT = { OR: pitcherMatch }
+      } else if (fp === "p" || fp.includes("pitch")) {
+        where.OR = pitcherMatch
       } else {
-        where.position = { contains: filters.position, mode: "insensitive" }
+        where.position = { contains: raw, mode: "insensitive" }
       }
     }
     if (filters.status) {
@@ -41,7 +45,27 @@ export class PlayerRepository {
       if (filters.ageMin != null) where.age.gte = filters.ageMin
       if (filters.ageMax != null) where.age.lte = filters.ageMax
     }
-    const rows = await prisma.player.findMany({ where, orderBy: { name: "asc" } })
+    return where
+  }
+
+  /** Row count for the same filter semantics as {@link getPlayers} (ignores pagination). */
+  async countPlayers(filters: PlayerFilters): Promise<number> {
+    const where = this.playerWhereFromFilters(filters)
+    return prisma.player.count({ where })
+  }
+
+  /** Applies optional `position`, `status`, `team`, `ageMin`/`ageMax` query semantics. */
+  async getPlayers(filters: PlayerFilters): Promise<Player[]> {
+    const where = this.playerWhereFromFilters(filters)
+    const args: Prisma.PlayerFindManyArgs = {
+      where,
+      orderBy: { name: "asc" },
+    }
+    if (filters.limit != null) {
+      args.take = filters.limit
+      args.skip = filters.offset ?? 0
+    }
+    const rows = await prisma.player.findMany(args)
     return rows.map((r) => ({
       id: r.id,
       name: r.name,

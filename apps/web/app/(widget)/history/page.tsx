@@ -54,7 +54,7 @@ export default function HistoryPage() {
           <button
             type="button"
             onClick={clearAll}
-            className="rounded-portal-sm border border-neutral-200 bg-white px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
+            className="rounded-portal-sm border border-neutral-200 bg-portal-surface px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50 dark:border-neutral-600 dark:text-neutral-200 dark:hover:bg-neutral-800/80"
           >
             Clear all
           </button>
@@ -79,7 +79,7 @@ export default function HistoryPage() {
           {entries.map((e, index) => (
             <li
               key={e.playerId}
-              className="flex items-stretch gap-3 rounded-portal border border-white/80 bg-white p-3 shadow-portal-card"
+              className="flex items-stretch gap-3 rounded-portal border border-neutral-200/80 bg-portal-surface p-3 shadow-portal-card dark:border-neutral-600/50"
             >
               <div className="flex w-9 shrink-0 items-center justify-center rounded-portal-sm bg-portal-filter-bg/80 text-xs font-bold text-neutral-600">
                 #{index + 1}

@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Image from "next/image"
 import Link from "next/link"
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react"
+import { PlayerAvatarPlaceholder } from "@/components/discovery/PlayerAvatarPlaceholder"
 import { useFavorites } from "@/components/favorites/FavoritesProvider"
 import { fetchPlayerProfile } from "@/lib/api"
 import type { PlayerProfile } from "@available-player-portal/shared"
@@ -68,7 +68,7 @@ export default function FavoritesPage() {
           {rows.map((row, index) => (
             <li
               key={row.id}
-              className="flex items-stretch gap-2 rounded-portal border border-white/80 bg-white p-3 shadow-portal-card"
+              className="flex items-stretch gap-2 rounded-portal border border-neutral-200/80 bg-portal-surface p-3 shadow-portal-card dark:border-neutral-600/50"
             >
               <div className="flex w-9 shrink-0 flex-col items-center justify-center rounded-portal-sm bg-portal-filter-bg/80 text-xs font-bold text-neutral-600">
                 #{index + 1}
@@ -83,22 +83,7 @@ export default function FavoritesPage() {
                   </p>
                 ) : (
                   <>
-                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full border border-neutral-100 bg-neutral-50">
-                      {(() => {
-                        const src =
-                          (row.profile.player as { imageUrl?: string | null }).imageUrl || "/player-placeholder.png"
-                        return (
-                          <Image
-                            src={src}
-                            alt=""
-                            fill
-                            className="object-cover object-top"
-                            sizes="56px"
-                            unoptimized={src.startsWith("http")}
-                          />
-                        )
-                      })()}
-                    </div>
+                    <PlayerAvatarPlaceholder size="sm" />
                     <div className="min-w-0 flex-1">
                       <Link
                         href={`/players/${encodeURIComponent(row.id)}`}

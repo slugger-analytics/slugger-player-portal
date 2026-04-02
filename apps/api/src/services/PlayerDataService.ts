@@ -20,6 +20,7 @@ import type {
   Player,
   PlayerFilters,
   PlayerProfile,
+  PlayerSummariesResponse,
   PlayerSummary,
   PitchingStats,
   Transaction,
@@ -51,6 +52,19 @@ export class PlayerDataService {
       out.push(await this.buildPlayerSummaryInternal(p))
     }
     return out
+  }
+
+  /** List + total row count for `GET /players` pagination (`limit` / `offset`). */
+  async listPlayerSummariesWithTotal(filters: PlayerFilters): Promise<PlayerSummariesResponse> {
+    const [total, list] = await Promise.all([
+      this.players.countPlayers(filters),
+      this.players.getPlayers(filters),
+    ])
+    const players: PlayerSummary[] = []
+    for (const p of list) {
+      players.push(await this.buildPlayerSummaryInternal(p))
+    }
+    return { players, total }
   }
 
   /** Single-player variant of {@link listPlayerSummaries} (404 path handled by route). */

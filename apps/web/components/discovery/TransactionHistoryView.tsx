@@ -48,7 +48,7 @@ export function TransactionHistoryView({ playerId }: Props) {
   }
 
   return (
-    <ul className="divide-y divide-neutral-200/90 overflow-hidden rounded-portal border border-neutral-200/90 bg-white shadow-portal-card">
+    <ul className="divide-y divide-neutral-200/90 overflow-hidden rounded-portal border border-neutral-200/90 bg-portal-surface shadow-portal-card dark:divide-neutral-600/50 dark:border-neutral-600/50">
       {items.map((t, idx) => (
         <li
           key={`${t.date}-${t.type}-${idx}`}

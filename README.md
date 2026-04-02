@@ -134,6 +134,19 @@ npm run dev
 
 Copy `.env.example` to `.env` and adjust values before running.
 
+### Troubleshooting: `404` on `main-app.js`, `layout.js`, `_next/static/…`
+
+Those files are **Next.js JavaScript and CSS chunks**. A **404** means the browser asked your server for a path under **`/_next/static/...`** and got nothing back, so the UI loads half-broken or “unstable.”
+
+| Cause | What to do |
+|--------|------------|
+| **Stale dev cache** after upgrades or branch switches | Stop `next dev`, delete **`apps/web/.next`**, start again, then **hard refresh** the browser (bypass cache). |
+| **Reverse proxy / nginx** only forwards `/` HTML, not static assets | Forward **`/_next/`** to the same Next process (same as HTML). |
+| **App hosted under a subpath** (e.g. `https://example.com/portal/dashboard`) without config | Set **`NEXT_PUBLIC_BASE_PATH`** to that prefix (e.g. `/portal`) in `.env`, rebuild or restart dev so it matches **`basePath`** in `apps/web/next.config.ts`. |
+| **Wrong host/port** (HTML from one origin, tabs pointing at another) | Open the app at the same URL the dev server prints (e.g. `http://localhost:3000`). |
+
+Monorepo hosts (Vercel, etc.): set the project **Root Directory** to **`apps/web`** so the Next build and `/_next` routes stay aligned.
+
 ---
 
 ## Environment Variables
@@ -146,6 +159,7 @@ Copy **`.env.example`** to **`.env`** at the repo root (or set env per app in yo
 | `PORT` | API | HTTP port (default `4000`). |
 | `TBC_FEED_PASSWORD` | API | TBC feed password; **server-only**, never exposed to the browser. |
 | `NEXT_PUBLIC_API_URL` | Web | Base URL of the Express API (e.g. `http://localhost:4000`). |
+| `NEXT_PUBLIC_BASE_PATH` | Web | Optional URL prefix when the app is not at domain root (must match `basePath` in `next.config.ts`). |
 | `NEXTAUTH_*` | Web | Standalone NextAuth when not using SLUGGER-only flow. |
 | `SLUGGER_*`, `NEXT_PUBLIC_SLUGGER_ORIGINS` | API / Web | Widget embedding and SLUGGER API calls. |
 | `MLB_*`, `BASEBALL_CUBE_*` | API | Reserved / optional for other data sources (see `.env.example`). |
@@ -179,7 +193,7 @@ Schedule the same command on a server (e.g. cron) with `DATABASE_URL` and `TBC_F
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Liveness check. |
-| `GET` | `/players` | Query: `position`, `status`, `team`, `ageMin`, `ageMax` — returns `PlayerSummary[]`. |
+| `GET` | `/players` | Query: filters + optional `limit`/`offset` — returns `{ players, total }`. See `docs/API_SPEC.md`. |
 | `GET` | `/players/:id` | Full `PlayerProfile` (player, recent/previous batting & pitching, transactions). |
 | `GET` | `/players/:id/transactions` | `Transaction[]` only (chronological). |
 | `POST` | `/sync` | Runs the full TBC → PostgreSQL pipeline (same as `npm run sync`). Optional: set `SYNC_INTERNAL_KEY` and send `Authorization: Bearer <key>`. |

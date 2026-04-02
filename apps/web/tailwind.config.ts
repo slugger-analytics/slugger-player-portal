@@ -2,23 +2,26 @@ import type { Config } from "tailwindcss"
 
 /**
  * Portal UI tokens — use `portal-*` classes so future screens stay visually consistent
- * with Player Discovery Home (steel blue accent, lavender filters, soft radii).
+ * with Player Discovery Home.
  */
 const config: Config = {
+  darkMode: "class",
   content: ["./app/**/*.{js,ts,jsx,tsx,mdx}", "./components/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
       colors: {
         portal: {
-          page: "#DCE4EE",
-          accent: "#6B8FB5",
-          "accent-hover": "#5A7A9B",
-          sidebar: "#F5F5F5",
-          "filter-bg": "#FAFAFE",
-          "filter-border": "#C5CAE9",
-          panel: "#EEEEEE",
-          chrome: "#E8ECF1",
-          "chrome-border": "#C5CCD6",
+          page: "var(--portal-page)",
+          accent: "var(--portal-accent)",
+          "accent-hover": "var(--portal-accent-hover)",
+          sidebar: "var(--portal-sidebar)",
+          "filter-bg": "var(--portal-filter-bg)",
+          "filter-border": "var(--portal-filter-border)",
+          panel: "var(--portal-panel)",
+          chrome: "var(--portal-chrome)",
+          "chrome-border": "var(--portal-chrome-border)",
+          surface: "var(--portal-surface)",
+          main: "var(--portal-main-bg)",
         },
       },
       borderRadius: {

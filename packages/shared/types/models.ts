@@ -51,6 +51,10 @@ export interface PlayerFilters {
   team?: string
   ageMin?: number
   ageMax?: number
+  /** Max rows to return (1–100). When set, enables pagination with {@link offset}. */
+  limit?: number
+  /** Skip this many rows before returning `limit` results (default 0). Ignored if `limit` is unset. */
+  offset?: number
 }
 
 /** API response for GET /players */
@@ -63,6 +67,13 @@ export interface PlayerSummary {
   minimalStatLine: string
   mostRecentTeam: string
   imageUrl?: string | null
+}
+
+/** API response for `GET /players` (paginated list + total matching filters). */
+export interface PlayerSummariesResponse {
+  players: PlayerSummary[]
+  /** Row count matching the same filters as `players`, ignoring `limit` / `offset`. */
+  total: number
 }
 
 /** API response for GET /players/:id */

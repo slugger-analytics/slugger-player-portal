@@ -10,10 +10,30 @@
 :root {
   --portal-page: #dce4ee;
   --portal-accent: #6b8fb5;
+  --portal-accent-hover: #5a7a9b;
   --portal-sidebar: #f5f5f5;
   --portal-filter-bg: #fafafe;
   --portal-filter-border: #c5cae9;
   --portal-panel: #eeeeee;
+  --portal-chrome: #e8ecf1;
+  --portal-chrome-border: #c5ccd6;
+  --portal-surface: #ffffff;
+  --portal-main-bg: #ffffff;
+}
+
+.dark {
+  color-scheme: dark;
+  --portal-page: #121820;
+  --portal-accent: #7a9fc4;
+  --portal-accent-hover: #8eb0d4;
+  --portal-sidebar: #1a1f28;
+  --portal-filter-bg: #1e2530;
+  --portal-filter-border: #3d4d62;
+  --portal-panel: #222a36;
+  --portal-chrome: #1a1f28;
+  --portal-chrome-border: #3d4d62;
+  --portal-surface: #1e2530;
+  --portal-main-bg: #161c24;
 }
 
 body {
@@ -40,7 +60,7 @@ body {
   }
   /** White surface card inside gray panels */
   .portal-surface {
-    @apply rounded-portal border border-neutral-200/80 bg-white shadow-portal-card;
+    @apply rounded-portal border border-neutral-200/80 bg-portal-surface shadow-portal-card dark:border-neutral-600/50;
   }
   /** Lavender filter container */
   .portal-filter-shell {
