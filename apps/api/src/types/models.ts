@@ -10,6 +10,7 @@ export type {
   BattingStats,
   PitchingStats,
   PlayerFilters,
+  PlayerSummariesResponse,
   PlayerSummary,
   PlayerProfile,
 } from "@available-player-portal/shared"

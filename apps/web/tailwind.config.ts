@@ -2,7 +2,7 @@ import type { Config } from "tailwindcss"
 
 /**
  * Portal UI tokens — use `portal-*` classes so future screens stay visually consistent
- * with Player Discovery Home (steel blue accent, lavender filters, soft radii).
+ * with Player Discovery Home.
  */
 const config: Config = {
   content: ["./app/**/*.{js,ts,jsx,tsx,mdx}", "./components/**/*.{js,ts,jsx,tsx}"],

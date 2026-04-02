@@ -10,7 +10,12 @@
  * resolve the same base URL via `process.env.NEXT_PUBLIC_*`.
  */
 
-import type { PlayerProfile, PlayerSummary, Transaction } from "@available-player-portal/shared"
+import type {
+  PlayerProfile,
+  PlayerSummariesResponse,
+  PlayerSummary,
+  Transaction,
+} from "@available-player-portal/shared"
 
 /** Base URL for the Express API (set in `.env` for production deployments). */
 export function getApiBaseUrl(): string {
@@ -41,15 +46,23 @@ function rethrowNetworkError(e: unknown, context: string): never {
   throw e
 }
 
-/** `GET /players` with optional filter query params (mirrors dashboard filter UI). */
+/** `GET /players` — filters + optional `limit` / `offset`; returns `{ players, total }`. */
 export async function fetchPlayerSummaries(
   params: Record<string, string | number | undefined>,
-): Promise<PlayerSummary[]> {
+): Promise<PlayerSummariesResponse> {
   const base = getApiBaseUrl()
   try {
     const res = await fetch(`${base}/players${qs(params)}`, { cache: "no-store" })
     if (!res.ok) throw new Error(`Failed to load players: ${res.status}`)
-    return (await res.json()) as PlayerSummary[]
+    const data = (await res.json()) as unknown
+    if (data && typeof data === "object" && "players" in data && "total" in data) {
+      return data as PlayerSummariesResponse
+    }
+    if (Array.isArray(data)) {
+      const players = data as PlayerSummary[]
+      return { players, total: players.length }
+    }
+    return { players: [], total: 0 }
   } catch (e) {
     rethrowNetworkError(e, "GET /players")
   }

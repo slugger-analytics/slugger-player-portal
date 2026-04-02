@@ -3,7 +3,7 @@
  * @description Express router for **Player Discovery** REST endpoints.
  *
  * **Routes (mounted at `/players` in `index.ts`):**
- * - `GET /` — query: `position`, `status`, `team`, `ageMin`, `ageMax` → `PlayerSummary[]`
+ * - `GET /` — query: `position`, `status`, `team`, `ageMin`, `ageMax`, `limit`, `offset` → `{ players, total }`
  * - `GET /:id` — full `PlayerProfile` (stats + embedded transactions)
  * - `GET /:id/transactions` — `Transaction[]` only (used by the web timeline component)
  *
@@ -47,7 +47,26 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     ageMax = Number(ageMaxRaw)
     if (Number.isNaN(ageMax)) throw new Error("Invalid ageMax")
   }
-  return { position, status, team, ageMin, ageMax }
+
+  let limit: number | undefined
+  const limitRaw = firstString(query.limit) ?? (typeof query.limit === "number" ? String(query.limit) : undefined)
+  if (limitRaw != null && limitRaw !== "") {
+    limit = Number(limitRaw)
+    if (!Number.isInteger(limit) || limit < 1) throw new Error("Invalid limit")
+    limit = Math.min(limit, 100)
+  }
+
+  let offset: number | undefined
+  const offsetRaw = firstString(query.offset) ?? (typeof query.offset === "number" ? String(query.offset) : undefined)
+  if (offsetRaw != null && offsetRaw !== "") {
+    offset = Number(offsetRaw)
+    if (!Number.isInteger(offset) || offset < 0) throw new Error("Invalid offset")
+  }
+  if (offset != null && offset > 0 && limit == null) {
+    throw new Error("Invalid offset: use limit when offset is set")
+  }
+
+  return { position, status, team, ageMin, ageMax, limit, offset }
 }
 
 /** Factory so tests can mount the router without starting the full app. */
@@ -57,8 +76,8 @@ export function createPlayerRouter(): Router {
   r.get("/", async (req, res, next) => {
     try {
       const filters = parseFilters(req.query as Record<string, unknown>)
-      const list = await playerData.listPlayerSummaries(filters)
-      res.json(list)
+      const body = await playerData.listPlayerSummariesWithTotal(filters)
+      res.json(body)
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Bad request"
       if (msg.startsWith("Invalid")) {

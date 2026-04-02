@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { PlayerCard } from "@/components/discovery/PlayerCard"
 import { fetchPlayerSummaries } from "@/lib/api"
+import { withBasePath } from "@/lib/base-path"
 import type { PlayerSummary } from "@available-player-portal/shared"
 
 type FilterKind = "position" | "age" | "team" | "status"
@@ -32,6 +33,9 @@ type UiFilter = {
 function newId(): string {
   return globalThis.crypto.randomUUID()
 }
+
+/** Discovery home loads this many profiles (2×4 grid); API applies the same `limit` so the DB never returns the full table. */
+const DISCOVERY_HOME_PAGE_SIZE = 8
 
 function filtersToQuery(filters: UiFilter[]): Record<string, string | number | undefined> {
   const q: Record<string, string | number | undefined> = {}
@@ -59,7 +63,9 @@ export default function PlayerDiscoveryHomePage() {
     },
   ])
   const [players, setPlayers] = useState<PlayerSummary[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   /** Bumps after a successful DB sync so the player list refetches with current filters. */
   const [refreshTick, setRefreshTick] = useState(0)
@@ -72,15 +78,22 @@ export default function PlayerDiscoveryHomePage() {
     | null
   >(null)
 
-  const query = useMemo(() => filtersToQuery(filters), [filters])
+  const filterParams = useMemo(() => filtersToQuery(filters), [filters])
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
-    fetchPlayerSummaries(query)
-      .then((rows) => {
-        if (!cancelled) setPlayers(rows)
+    fetchPlayerSummaries({
+      ...filterParams,
+      limit: DISCOVERY_HOME_PAGE_SIZE,
+      offset: 0,
+    })
+      .then(({ players: rows, total: t }) => {
+        if (!cancelled) {
+          setPlayers(rows)
+          setTotal(t)
+        }
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load players")
@@ -91,7 +104,27 @@ export default function PlayerDiscoveryHomePage() {
     return () => {
       cancelled = true
     }
-  }, [query, refreshTick])
+  }, [filterParams, refreshTick])
+
+  async function handleLoadMore() {
+    if (loadingMore || players.length >= total) return
+    setLoadingMore(true)
+    setError(null)
+    try {
+      const offset = players.length
+      const { players: rows, total: t } = await fetchPlayerSummaries({
+        ...filterParams,
+        limit: DISCOVERY_HOME_PAGE_SIZE,
+        offset,
+      })
+      setPlayers((prev) => [...prev, ...rows])
+      setTotal(t)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to load more players")
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   useEffect(() => {
     if (!menuFor) return
@@ -119,7 +152,7 @@ export default function PlayerDiscoveryHomePage() {
     setSyncing(true)
     setSyncBanner(null)
     try {
-      const res = await fetch("/api/sync", { method: "POST" })
+      const res = await fetch(withBasePath("/api/sync"), { method: "POST" })
       const body = (await res.json()) as {
         ok?: boolean
         error?: string
@@ -250,10 +283,30 @@ export default function PlayerDiscoveryHomePage() {
           </div>
         </section>
 
-        <section className="min-w-0 flex-1 lg:w-[45%]">
-          <div className="portal-panel-well min-h-[320px] w-full max-w-[400px] lg:max-w-none">
+        <section className="min-w-0 flex-1 lg:min-w-0">
+          <div className="portal-panel-well min-h-[480px] w-full min-w-0">
             {loading ? (
-              <p className="text-sm font-medium text-neutral-600">Loading players…</p>
+              <div
+                className="grid grid-cols-2 gap-3 sm:gap-4"
+                style={{ gridTemplateRows: "repeat(4, minmax(0, 1fr))" }}
+                aria-busy
+                aria-label="Loading players"
+              >
+                {Array.from({ length: DISCOVERY_HOME_PAGE_SIZE }, (_, i) => (
+                  <div
+                    key={i}
+                    className="flex min-h-[112px] min-w-0 animate-pulse gap-3 rounded-portal border border-white/80 bg-white p-3 shadow-portal-card"
+                  >
+                    <div className="h-[88px] w-[88px] shrink-0 rounded-full bg-neutral-200" />
+                    <div className="min-w-0 flex-1 space-y-2 py-1">
+                      <div className="h-3.5 w-[72%] rounded bg-neutral-200" />
+                      <div className="h-3 w-[40%] rounded bg-neutral-200" />
+                      <div className="h-3 w-[55%] rounded bg-neutral-200" />
+                      <div className="h-3 w-full rounded bg-neutral-200" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : error ? (
               <div className="rounded-portal-sm border border-amber-200/80 bg-amber-50/90 px-3 py-3 text-sm text-amber-950">
                 <p className="font-semibold">Could not load players</p>
@@ -267,11 +320,31 @@ export default function PlayerDiscoveryHomePage() {
                 ), then the list will reload.
               </p>
             ) : (
-              <div className="flex flex-wrap content-start gap-4">
-                {players.map((p) => (
-                  <PlayerCard key={p.id} player={p} />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:gap-5">
+                  {players.map((p) => (
+                    <PlayerCard key={p.id} player={p} className="!max-w-none min-w-0" />
+                  ))}
+                </div>
+                <div className="mt-5 flex flex-col items-stretch gap-3 border-t border-neutral-200/80 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-center text-sm text-neutral-600 sm:text-left">
+                    <span className="font-semibold tabular-nums text-neutral-900">{players.length}</span>
+                    {" of "}
+                    <span className="font-semibold tabular-nums text-neutral-900">{total}</span>
+                    {" total results shown"}
+                  </p>
+                  {players.length < total ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleLoadMore()}
+                      disabled={loadingMore}
+                      className="inline-flex shrink-0 items-center justify-center rounded-portal-sm border border-portal-filter-border bg-white px-4 py-2.5 text-sm font-semibold text-[#4A5F78] shadow-portal-card transition hover:border-portal-accent hover:bg-portal-filter-bg/60 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {loadingMore ? "Loading…" : "Load more"}
+                    </button>
+                  ) : null}
+                </div>
+              </>
             )}
           </div>
         </section>

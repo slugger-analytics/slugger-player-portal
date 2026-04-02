@@ -7,7 +7,7 @@ import type { ReactNode } from "react"
 export function BrowserChrome({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-portal-page px-3 py-5 sm:px-4 sm:py-8">
-      <div className="mx-auto w-full max-w-[820px] overflow-hidden rounded-portal-lg border border-portal-chrome-border bg-white shadow-portal">
+      <div className="mx-auto w-full max-w-[min(100vw-1.5rem,72rem)] overflow-hidden rounded-portal-lg border border-portal-chrome-border bg-white shadow-portal">
         <div
           className="flex items-center gap-3 border-b border-portal-chrome-border bg-portal-chrome px-3 py-2.5 sm:px-4"
           aria-hidden

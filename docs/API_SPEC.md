@@ -38,10 +38,20 @@ Returns a list of player summaries for the discovery UI, with optional filters. 
 | `team`     | string | Substring match on `team` (case-insensitive). |
 | `ageMin`   | number | Inclusive minimum `age`. |
 | `ageMax`   | number | Inclusive maximum `age`. |
+| `limit`    | number | Max rows to return (integer **1–100**). Applies `take` in Prisma after sort by name. |
+| `offset`   | number | Skip this many rows before applying `limit` (integer **≥ 0**). Ignored unless `limit` is set. |
 
-Invalid `ageMin` / `ageMax` (non-numeric) → **`400`** with `{ "error": "Invalid ageMin" | "Invalid ageMax" }`.
+Invalid `ageMin` / `ageMax` / `limit` / `offset` (non-numeric or out of range) → **`400`** with `{ "error": "Invalid …" }`.  
+`offset` **> 0** without `limit` → **`400`** with `{ "error": "Invalid offset: use limit when offset is set" }`.
 
-**Response:** `200 OK` — array of **`PlayerSummary`** (see `packages/shared/types/models.ts`):
+**Response:** `200 OK` — JSON object **`PlayerSummariesResponse`**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `players` | **`PlayerSummary[]`** | Page of rows for this request (after `limit` / `offset`). |
+| `total` | number | Count of all rows matching the same filters, **ignoring** `limit` / `offset` (for “N of total” UI). |
+
+Each **`PlayerSummary`** in `players`:
 
 | Field | Type | Description |
 |-------|------|-------------|

@@ -13,15 +13,17 @@ import { FavoriteHeartButton } from "@/components/favorites/FavoriteHeartButton"
 
 type Props = {
   player: PlayerSummary
+  /** Merged onto the card link (e.g. `w-full max-w-none` for grid layouts). */
+  className?: string
 }
 
-export function PlayerCard({ player }: Props) {
+export function PlayerCard({ player, className = "" }: Props) {
   const src = player.imageUrl || "/player-placeholder.png"
 
   return (
     <Link
       href={`/players/${encodeURIComponent(player.id)}`}
-      className="group relative flex max-w-[240px] shrink-0 gap-3 rounded-portal border border-white/80 bg-white p-3 shadow-portal-card transition hover:border-portal-filter-border hover:shadow-portal"
+      className={`group relative flex w-full max-w-[240px] shrink-0 items-start gap-3 rounded-portal border border-white/80 bg-white p-3 shadow-portal-card transition hover:border-portal-filter-border hover:shadow-portal ${className}`}
     >
       <div className="absolute right-1 top-1 z-10">
         <FavoriteHeartButton playerId={player.id} />
@@ -36,13 +38,15 @@ export function PlayerCard({ player }: Props) {
           unoptimized={src.startsWith("http")}
         />
       </div>
-      <div className="min-w-0 flex-1 text-left">
-        <div className="text-sm font-semibold leading-tight text-black group-hover:text-portal-accent-hover">
+      <div className="min-w-0 flex-1 overflow-hidden text-left">
+        <div className="break-words text-sm font-semibold leading-tight text-black group-hover:text-portal-accent-hover">
           {player.name}
         </div>
-        <div className="mt-1 text-xs font-medium text-neutral-600">{player.position}</div>
-        <div className="text-xs text-neutral-500">{player.team}</div>
-        <div className="mt-1.5 font-mono text-[11px] text-neutral-800">{player.minimalStatLine}</div>
+        <div className="mt-1 break-words text-xs font-medium text-neutral-600">{player.position}</div>
+        <div className="break-words text-xs text-neutral-500">{player.team}</div>
+        <div className="mt-1.5 break-words font-mono text-[11px] leading-snug text-neutral-800">
+          {player.minimalStatLine}
+        </div>
       </div>
     </Link>
   )
