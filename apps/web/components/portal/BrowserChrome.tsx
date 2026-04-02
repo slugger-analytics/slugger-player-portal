@@ -7,7 +7,7 @@ import type { ReactNode } from "react"
 export function BrowserChrome({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-portal-page px-3 py-5 sm:px-4 sm:py-8">
-      <div className="mx-auto w-full max-w-[min(100vw-1.5rem,72rem)] overflow-hidden rounded-portal-lg border border-portal-chrome-border bg-white shadow-portal">
+      <div className="mx-auto w-full max-w-[min(100vw-1.5rem,72rem)] overflow-hidden rounded-portal-lg border border-portal-chrome-border bg-portal-main shadow-portal">
         <div
           className="flex items-center gap-3 border-b border-portal-chrome-border bg-portal-chrome px-3 py-2.5 sm:px-4"
           aria-hidden
@@ -17,7 +17,7 @@ export function BrowserChrome({ children }: { children: ReactNode }) {
             <span className="h-3 w-3 rounded-full bg-[#FEBC2E]" />
             <span className="h-3 w-3 rounded-full bg-[#28C840]" />
           </div>
-          <div className="min-w-0 flex-1 rounded-lg border border-white/60 bg-white/95 px-3 py-1.5 text-center text-xs font-medium text-neutral-500 shadow-sm">
+          <div className="min-w-0 flex-1 rounded-lg border border-neutral-200/60 bg-portal-surface/95 px-3 py-1.5 text-center text-xs font-medium text-neutral-500 shadow-sm dark:border-neutral-600/50 dark:text-neutral-400">
             Player Discovery Portal
           </div>
         </div>

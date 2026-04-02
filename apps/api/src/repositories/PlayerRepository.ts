@@ -19,15 +19,19 @@ export class PlayerRepository {
   private playerWhereFromFilters(filters: PlayerFilters): Prisma.PlayerWhereInput {
     const where: Prisma.PlayerWhereInput = {}
     if (filters.position) {
-      const fp = filters.position.toLowerCase()
-      if (fp.includes("pitch")) {
-        where.OR = [
-          { position: { contains: "Pitch", mode: "insensitive" } },
-          { position: { equals: "p", mode: "insensitive" } },
-          { position: { startsWith: "p-", mode: "insensitive" } },
-        ]
+      const raw = filters.position.trim()
+      const fp = raw.toLowerCase()
+      const pitcherMatch: Prisma.PlayerWhereInput[] = [
+        { position: { contains: "Pitch", mode: "insensitive" } },
+        { position: { equals: "p", mode: "insensitive" } },
+        { position: { startsWith: "p-", mode: "insensitive" } },
+      ]
+      if (fp === "non-p") {
+        where.NOT = { OR: pitcherMatch }
+      } else if (fp === "p" || fp.includes("pitch")) {
+        where.OR = pitcherMatch
       } else {
-        where.position = { contains: filters.position, mode: "insensitive" }
+        where.position = { contains: raw, mode: "insensitive" }
       }
     }
     if (filters.status) {
