@@ -60,8 +60,11 @@ export class BattingStatsRepository {
   /** Batch upsert of parsed `BattingStats` rows (chunked `INSERT … ON CONFLICT`). */
   async upsertStats(stats: BattingStats[]): Promise<void> {
     if (stats.length === 0) return
-    for (let i = 0; i < stats.length; i += SYNC_UPSERT_CHUNK) {
-      const chunk = stats.slice(i, i + SYNC_UPSERT_CHUNK)
+    const byKey = new Map<string, BattingStats>()
+    for (const s of stats) byKey.set(`${s.playerId}\0${s.season}`, s)
+    const uniqueStats = [...byKey.values()]
+    for (let i = 0; i < uniqueStats.length; i += SYNC_UPSERT_CHUNK) {
+      const chunk = uniqueStats.slice(i, i + SYNC_UPSERT_CHUNK)
       const rows = chunk.map((s) =>
         Prisma.sql`(${s.playerId}, ${s.season}, ${new Prisma.Decimal(s.avg.toFixed(3))}, ${new Prisma.Decimal(s.obp.toFixed(3))}, ${new Prisma.Decimal(s.slg.toFixed(3))}, ${new Prisma.Decimal(s.ops.toFixed(3))})`,
       )

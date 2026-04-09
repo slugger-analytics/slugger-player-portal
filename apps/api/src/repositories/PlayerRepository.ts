@@ -127,8 +127,11 @@ export class PlayerRepository {
   /** Idempotent sync: bulk upsert (one statement per chunk) for refresh/sync speed. */
   async upsertPlayers(players: Player[]): Promise<void> {
     if (players.length === 0) return
-    for (let i = 0; i < players.length; i += SYNC_UPSERT_CHUNK) {
-      const chunk = players.slice(i, i + SYNC_UPSERT_CHUNK)
+    const byId = new Map<string, Player>()
+    for (const p of players) byId.set(p.id, p)
+    const uniquePlayers = [...byId.values()]
+    for (let i = 0; i < uniquePlayers.length; i += SYNC_UPSERT_CHUNK) {
+      const chunk = uniquePlayers.slice(i, i + SYNC_UPSERT_CHUNK)
       const rows = chunk.map((p) => {
         const discoveryEligible = isPlayerDiscoveryEligible(p)
         return Prisma.sql`(${p.id}, ${p.name}, ${p.position || null}, ${p.team || null}, ${p.status}, ${p.age ?? null}, ${discoveryEligible}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`

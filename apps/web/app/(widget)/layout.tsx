@@ -7,6 +7,7 @@
 import { UserRound } from "lucide-react"
 import type { ReactNode } from "react"
 import { FavoritesProvider } from "@/components/favorites/FavoritesProvider"
+import { UpdatesWatchProvider } from "@/components/updates/UpdatesWatchProvider"
 import { BrowserChrome } from "@/components/portal/BrowserChrome"
 import { SettingsMenu } from "@/components/portal/SettingsMenu"
 import { WidgetSidebar } from "@/components/portal/WidgetSidebar"
@@ -15,6 +16,7 @@ export default function WidgetShellLayout({ children }: { children: ReactNode })
   return (
     <BrowserChrome>
       <FavoritesProvider>
+        <UpdatesWatchProvider>
         <div className="flex min-h-[min(100vh-10rem,900px)]">
           <WidgetSidebar />
           <div className="min-w-0 flex-1 bg-portal-main">
@@ -30,6 +32,7 @@ export default function WidgetShellLayout({ children }: { children: ReactNode })
             {children}
           </div>
         </div>
+        </UpdatesWatchProvider>
       </FavoritesProvider>
     </BrowserChrome>
   )

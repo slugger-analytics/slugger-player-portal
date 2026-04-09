@@ -40,8 +40,11 @@ export class TransactionRepository {
   /** Creates or updates by `uniqueHash`; bulk upsert per chunk for sync performance. */
   async upsertTransactions(txs: Transaction[]): Promise<void> {
     if (txs.length === 0) return
-    for (let i = 0; i < txs.length; i += SYNC_UPSERT_CHUNK) {
-      const chunk = txs.slice(i, i + SYNC_UPSERT_CHUNK)
+    const byHash = new Map<string, Transaction>()
+    for (const t of txs) byHash.set(uniqueHash(t), t)
+    const uniqueTxs = [...byHash.values()]
+    for (let i = 0; i < uniqueTxs.length; i += SYNC_UPSERT_CHUNK) {
+      const chunk = uniqueTxs.slice(i, i + SYNC_UPSERT_CHUNK)
       const rows = chunk.map((t) => {
         const hash = uniqueHash(t)
         const d = new Date(t.date + "T12:00:00.000Z")
