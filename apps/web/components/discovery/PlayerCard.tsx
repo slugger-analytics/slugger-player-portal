@@ -10,6 +10,7 @@ import Link from "next/link"
 import type { PlayerSummary } from "@available-player-portal/shared"
 import { PlayerAvatarPlaceholder } from "@/components/discovery/PlayerAvatarPlaceholder"
 import { FavoriteHeartButton } from "@/components/favorites/FavoriteHeartButton"
+import { PlayerUpdatesBellButton } from "@/components/updates/PlayerUpdatesBellButton"
 
 type Props = {
   player: PlayerSummary
@@ -23,7 +24,8 @@ export function PlayerCard({ player, className = "" }: Props) {
       href={`/players/${encodeURIComponent(player.id)}`}
       className={`group relative flex w-full min-w-0 shrink-0 items-start gap-3 rounded-portal border border-neutral-200/80 bg-portal-surface p-3 shadow-portal-card transition hover:border-portal-filter-border hover:shadow-portal dark:border-neutral-600/50 ${className}`}
     >
-      <div className="absolute right-1 top-1 z-10">
+      <div className="absolute right-1 top-1 z-10 flex items-center gap-0.5">
+        <PlayerUpdatesBellButton playerId={player.id} />
         <FavoriteHeartButton playerId={player.id} />
       </div>
       <PlayerAvatarPlaceholder size="md" />

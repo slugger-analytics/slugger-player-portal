@@ -68,6 +68,33 @@ export async function fetchPlayerSummaries(
   }
 }
 
+/**
+ * Loads a single player as {@link PlayerSummary} for cards (e.g. Updates “watched” list).
+ * Uses `GET /players/:id` and derives `minimalStatLine` from recent batting/pitching when present.
+ */
+export async function fetchPlayerSummaryForCard(id: string): Promise<PlayerSummary> {
+  const profile = await fetchPlayerProfile(id)
+  const p = profile.player
+  let minimalStatLine = "—"
+  if (profile.mostRecentBatting) {
+    const b = profile.mostRecentBatting
+    minimalStatLine = `AVG ${Number(b.avg).toFixed(3)} · OPS ${Number(b.ops).toFixed(3)}`
+  } else if (profile.mostRecentPitching) {
+    const pit = profile.mostRecentPitching
+    minimalStatLine = `ERA ${Number(pit.era).toFixed(2)} · WHIP ${Number(pit.whip).toFixed(2)}`
+  }
+  return {
+    id: p.id,
+    name: p.name,
+    position: p.position,
+    team: p.team,
+    status: p.status,
+    minimalStatLine,
+    mostRecentTeam: p.team,
+    imageUrl: null,
+  }
+}
+
 /** `GET /players/:id` — full profile (stats + transactions embedded in JSON). */
 export async function fetchPlayerProfile(id: string): Promise<PlayerProfile> {
   const base = getApiBaseUrl()
