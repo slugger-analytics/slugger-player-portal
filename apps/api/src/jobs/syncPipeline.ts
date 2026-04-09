@@ -28,6 +28,7 @@ import { TransactionRepository } from "../repositories/TransactionRepository"
 import { BattingStatsRepository } from "../repositories/BattingStatsRepository"
 import { PitchingStatsRepository } from "../repositories/PitchingStatsRepository"
 import type { Player } from "../types/models"
+import { isPlayerDiscoveryEligible } from "../utils/playerEligibility"
 
 function mergePlayers(lists: Player[][]): Player[] {
   const map = new Map<string, Player>()
@@ -89,7 +90,7 @@ export async function runSyncPipeline(): Promise<SyncPipelineResult> {
     parser.parsePlayersFromTransactionFeed(tranxRaw),
     parser.parsePlayersFromBattingFeed(batRaw),
     parser.parsePlayersFromPitchingFeed(pitRaw),
-  ])
+  ]).filter(isPlayerDiscoveryEligible)
 
   await players.upsertPlayers(playerList)
   await txs.upsertTransactions(parsedTx)

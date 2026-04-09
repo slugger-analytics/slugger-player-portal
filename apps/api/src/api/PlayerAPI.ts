@@ -3,7 +3,7 @@
  * @description Express router for **Player Discovery** REST endpoints.
  *
  * **Routes (mounted at `/players` in `index.ts`):**
- * - `GET /` — query: `position`, `status`, `team`, `ageMin`, `ageMax`, `limit`, `offset` → `{ players, total }`
+ * - `GET /` — query: `position`, `status`, `team`, `ageMin`, `ageMax`, `hasStats`, `limit`, `offset` → `{ players, total }`
  * - `GET /:id` — full `PlayerProfile` (stats + embedded transactions)
  * - `GET /:id/transactions` — `Transaction[]` only (used by the web timeline component)
  *
@@ -66,7 +66,20 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     throw new Error("Invalid offset: use limit when offset is set")
   }
 
-  return { position, status, team, ageMin, ageMax, limit, offset }
+  let hasStats: boolean | undefined
+  const hasStatsRaw = firstString(query.hasStats)
+  if (hasStatsRaw != null && hasStatsRaw !== "") {
+    const v = hasStatsRaw.toLowerCase()
+    if (v === "true" || v === "1" || v === "yes") {
+      hasStats = true
+    } else if (v === "false" || v === "0" || v === "no") {
+      hasStats = undefined
+    } else {
+      throw new Error("Invalid hasStats")
+    }
+  }
+
+  return { position, status, team, ageMin, ageMax, hasStats, limit, offset }
 }
 
 /** Factory so tests can mount the router without starting the full app. */
