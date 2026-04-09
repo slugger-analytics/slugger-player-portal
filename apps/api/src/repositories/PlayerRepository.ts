@@ -13,6 +13,11 @@
 import { Prisma } from "@prisma/client"
 import type { Player, PlayerFilters } from "../types/models"
 import { prisma } from "../lib/prisma"
+import { isPlayerDiscoveryEligible } from "../utils/playerEligibility"
+
+const DISCOVERY_SCAN_BATCH = 400
+/** Stop scanning after this many DB rows to avoid unbounded reads (raise if your roster is larger). */
+const DISCOVERY_SCAN_MAX_ROWS = 200_000
 
 export class PlayerRepository {
   /** Shared `where` for `findMany` / `count` (does not use `limit` / `offset`). */
@@ -45,35 +50,93 @@ export class PlayerRepository {
       if (filters.ageMin != null) where.age.gte = filters.ageMin
       if (filters.ageMax != null) where.age.lte = filters.ageMax
     }
+    if (filters.hasStats) {
+      return {
+        AND: [
+          where,
+          {
+            OR: [{ battingStats: { some: {} } }, { pitchingStats: { some: {} } }],
+          },
+        ],
+      }
+    }
     return where
   }
 
-  /** Row count for the same filter semantics as {@link getPlayers} (ignores pagination). */
-  async countPlayers(filters: PlayerFilters): Promise<number> {
-    const where = this.playerWhereFromFilters(filters)
-    return prisma.player.count({ where })
-  }
-
-  /** Applies optional `position`, `status`, `team`, `ageMin`/`ageMax` query semantics. */
-  async getPlayers(filters: PlayerFilters): Promise<Player[]> {
-    const where = this.playerWhereFromFilters(filters)
-    const args: Prisma.PlayerFindManyArgs = {
-      where,
-      orderBy: { name: "asc" },
-    }
-    if (filters.limit != null) {
-      args.take = filters.limit
-      args.skip = filters.offset ?? 0
-    }
-    const rows = await prisma.player.findMany(args)
-    return rows.map((r) => ({
+  private mapRow(r: {
+    id: string
+    name: string
+    position: string | null
+    team: string | null
+    status: string
+    age: number | null
+  }): Player {
+    return {
       id: r.id,
       name: r.name,
       position: r.position ?? "",
       team: r.team ?? "",
       status: r.status,
       age: r.age ?? undefined,
-    }))
+    }
+  }
+
+  /**
+   * Scans DB rows in `name` order and counts those passing {@link isPlayerDiscoveryEligible}.
+   * Omits junk ids (e.g. `000`) and non-name rows from mis-parsed TBC CSV.
+   */
+  async countPlayers(filters: PlayerFilters): Promise<number> {
+    const where = this.playerWhereFromFilters(filters)
+    let dbSkip = 0
+    let eligible = 0
+    while (dbSkip < DISCOVERY_SCAN_MAX_ROWS) {
+      const batch = await prisma.player.findMany({
+        where,
+        orderBy: { name: "asc" },
+        skip: dbSkip,
+        take: DISCOVERY_SCAN_BATCH,
+        select: { id: true, name: true },
+      })
+      if (batch.length === 0) break
+      for (const row of batch) {
+        if (isPlayerDiscoveryEligible(row)) eligible++
+      }
+      dbSkip += batch.length
+      if (batch.length < DISCOVERY_SCAN_BATCH) break
+    }
+    return eligible
+  }
+
+  /**
+   * Discovery list: same filters as before, but only **eligible** players (real names, plausible ids).
+   * Pagination walks the filtered stream in `name` order (re-scans from the start for each request;
+   * fine for typical roster sizes).
+   */
+  async getPlayers(filters: PlayerFilters): Promise<Player[]> {
+    const where = this.playerWhereFromFilters(filters)
+    if (filters.limit == null) {
+      const rows = await prisma.player.findMany({ where, orderBy: { name: "asc" } })
+      return rows.map((r) => this.mapRow(r)).filter(isPlayerDiscoveryEligible)
+    }
+    const needEnd = (filters.offset ?? 0) + filters.limit
+    let dbSkip = 0
+    const eligible: Player[] = []
+    while (eligible.length < needEnd && dbSkip < DISCOVERY_SCAN_MAX_ROWS) {
+      const batch = await prisma.player.findMany({
+        where,
+        orderBy: { name: "asc" },
+        skip: dbSkip,
+        take: DISCOVERY_SCAN_BATCH,
+      })
+      if (batch.length === 0) break
+      for (const row of batch) {
+        const p = this.mapRow(row)
+        if (isPlayerDiscoveryEligible(p)) eligible.push(p)
+      }
+      dbSkip += batch.length
+      if (batch.length < DISCOVERY_SCAN_BATCH) break
+    }
+    return eligible.slice(filters.offset ?? 0, needEnd)
   }
 
   /** Lookup by primary key (`Player.id` = TBC `playerid`). */

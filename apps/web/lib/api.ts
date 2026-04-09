@@ -25,11 +25,11 @@ export function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
 }
 
-/** Builds `?a=1&b=2` from a params object; omits undefined and empty strings. */
-function qs(params: Record<string, string | number | undefined>): string {
+/** Builds `?a=1&b=2` from a params object; omits undefined, empty strings, and `false`. */
+function qs(params: Record<string, string | number | boolean | undefined>): string {
   const u = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
-    if (v === undefined || v === "") continue
+    if (v === undefined || v === "" || v === false) continue
     u.set(k, String(v))
   }
   const s = u.toString()
@@ -48,7 +48,7 @@ function rethrowNetworkError(e: unknown, context: string): never {
 
 /** `GET /players` — filters + optional `limit` / `offset`; returns `{ players, total }`. */
 export async function fetchPlayerSummaries(
-  params: Record<string, string | number | undefined>,
+  params: Record<string, string | number | boolean | undefined>,
 ): Promise<PlayerSummariesResponse> {
   const base = getApiBaseUrl()
   try {

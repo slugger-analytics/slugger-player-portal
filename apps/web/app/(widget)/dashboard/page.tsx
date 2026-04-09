@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react"
-import { MoreVertical, Plus, RefreshCw, UserRound } from "lucide-react"
+import { ChevronDown, MoreVertical, Plus, RefreshCw, UserRound } from "lucide-react"
 import { PlayerCard } from "@/components/discovery/PlayerCard"
 import { fetchPlayerSummaries } from "@/lib/api"
 import { withBasePath } from "@/lib/base-path"
@@ -26,6 +26,28 @@ type UiFilter = {
 function newId(): string {
   return globalThis.crypto.randomUUID()
 }
+
+/** Default row when opening “Add preferences” for a given type (dropdown). */
+function defaultUiFilterForPreset(preset: FilterKind): UiFilter {
+  const id = newId()
+  switch (preset) {
+    case "position":
+      return { id, kind: "position", label: "Position: Select", rawValue: "" }
+    case "age":
+      return { id, kind: "age", label: "Age: Less than 25", ageMode: "lt", ageValue: 25 }
+    case "team":
+      return { id, kind: "team", label: "Team: —", rawValue: "" }
+    case "status":
+      return { id, kind: "status", label: "Status: available", rawValue: "available" }
+  }
+}
+
+const ADD_PREFERENCE_OPTIONS: { kind: FilterKind; label: string }[] = [
+  { kind: "position", label: "Position" },
+  { kind: "age", label: "Age" },
+  { kind: "team", label: "Team" },
+  { kind: "status", label: "Status" },
+]
 
 /** Each batch from `GET /players` (2 columns × 4 rows); “Load more” appends the next batch below. */
 const DISCOVERY_HOME_PAGE_SIZE = 8
@@ -49,8 +71,8 @@ const POSITION_FILTER_OPTIONS = [
   "DH",
 ] as const
 
-function filtersToQuery(filters: UiFilter[]): Record<string, string | number | undefined> {
-  const q: Record<string, string | number | undefined> = {}
+function filtersToQuery(filters: UiFilter[]): Record<string, string | number | boolean | undefined> {
+  const q: Record<string, string | number | boolean | undefined> = {}
   for (const f of filters) {
     if (f.kind === "position" && f.rawValue) q.position = f.rawValue
     if (f.kind === "team" && f.rawValue) q.team = f.rawValue
@@ -65,6 +87,8 @@ function filtersToQuery(filters: UiFilter[]): Record<string, string | number | u
 
 export default function PlayerDiscoveryHomePage() {
   const [filters, setFilters] = useState<UiFilter[]>([])
+  /** “Stats Available” — only players with batting or pitching rows. */
+  const [onlyWithStats, setOnlyWithStats] = useState(false)
   const [players, setPlayers] = useState<PlayerSummary[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -75,13 +99,18 @@ export default function PlayerDiscoveryHomePage() {
   const [syncing, setSyncing] = useState(false)
   const [syncBanner, setSyncBanner] = useState<{ variant: "success" | "error"; text: string } | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
+  const [addPrefsOpen, setAddPrefsOpen] = useState(false)
   const [modal, setModal] = useState<
-    | { mode: "add" }
+    | { mode: "add"; presetKind?: FilterKind }
     | { mode: "edit"; filter: UiFilter }
     | null
   >(null)
 
-  const filterParams = useMemo(() => filtersToQuery(filters), [filters])
+  const filterParams = useMemo(() => {
+    const q = filtersToQuery(filters)
+    if (onlyWithStats) q.hasStats = true
+    return q
+  }, [filters, onlyWithStats])
 
   /** Filters or DB sync → first batch only (replaces list; “Load more” appends below). */
   useEffect(() => {
@@ -142,13 +171,20 @@ export default function PlayerDiscoveryHomePage() {
     return () => document.removeEventListener("pointerdown", onPointerDown)
   }, [menuFor])
 
+  useEffect(() => {
+    if (!addPrefsOpen) return
+    const onPointerDown = (e: PointerEvent) => {
+      const el = e.target as HTMLElement | null
+      if (!el) return
+      if (el.closest("[data-add-prefs-root]")) return
+      setAddPrefsOpen(false)
+    }
+    document.addEventListener("pointerdown", onPointerDown)
+    return () => document.removeEventListener("pointerdown", onPointerDown)
+  }, [addPrefsOpen])
+
   function removeFilter(id: string) {
     setFilters((prev) => prev.filter((f) => f.id !== id))
-    setMenuFor(null)
-  }
-
-  function openAdd() {
-    setModal({ mode: "add" })
     setMenuFor(null)
   }
 
@@ -217,8 +253,10 @@ export default function PlayerDiscoveryHomePage() {
           <div className="portal-filter-shell">
             <div className="flex flex-col gap-2.5">
               {filters.length === 0 ? (
-                <div className="flex min-h-12 items-center rounded-portal-sm bg-portal-surface px-3 py-3 shadow-portal-card">
-                  <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">No preferences selected.</p>
+                <div className="flex min-h-12 w-full items-center justify-center rounded-portal-sm bg-portal-surface px-3 py-3 text-center shadow-portal-card">
+                  <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+                    No preferences selected.
+                  </p>
                 </div>
               ) : (
                 filters.map((f) => (
@@ -269,16 +307,60 @@ export default function PlayerDiscoveryHomePage() {
                 ))
               )}
             </div>
+
+            <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-portal-sm bg-portal-surface px-3 py-2.5 shadow-portal-card">
+              <input
+                type="checkbox"
+                checked={onlyWithStats}
+                onChange={(e) => setOnlyWithStats(e.target.checked)}
+                className="h-4 w-4 shrink-0 rounded border-neutral-300 text-portal-accent focus:ring-portal-accent"
+              />
+              <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">Stats Available</span>
+            </label>
           </div>
 
-          <button
-            type="button"
-            onClick={openAdd}
-            className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-portal-sm border border-portal-filter-border bg-portal-surface px-4 text-sm font-semibold text-[#4A5F78] shadow-portal-card transition hover:border-portal-accent hover:bg-portal-filter-bg/60 dark:text-portal-accent"
-          >
-            <Plus className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
-            Add preferences
-          </button>
+          <div className="relative mt-4" data-add-prefs-root>
+            <button
+              type="button"
+              aria-expanded={addPrefsOpen}
+              aria-haspopup="listbox"
+              aria-controls="add-preferences-menu"
+              id="add-preferences-button"
+              onClick={() => setAddPrefsOpen((o) => !o)}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-portal-sm border border-portal-filter-border bg-portal-surface px-4 text-sm font-semibold text-[#4A5F78] shadow-portal-card transition hover:border-portal-accent hover:bg-portal-filter-bg/60 dark:text-portal-accent"
+            >
+              <Plus className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
+              Add preferences
+              <ChevronDown
+                className={`h-4 w-4 shrink-0 transition-transform ${addPrefsOpen ? "rotate-180" : ""}`}
+                aria-hidden
+              />
+            </button>
+            {addPrefsOpen ? (
+              <ul
+                id="add-preferences-menu"
+                role="listbox"
+                aria-labelledby="add-preferences-button"
+                className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-portal-sm border border-neutral-200/90 bg-portal-surface py-1 shadow-portal dark:border-neutral-600/80"
+              >
+                {ADD_PREFERENCE_OPTIONS.map(({ kind, label }) => (
+                  <li key={kind} role="none">
+                    <button
+                      type="button"
+                      role="option"
+                      className="block w-full px-3 py-2.5 text-left text-sm text-neutral-800 hover:bg-portal-filter-bg dark:text-neutral-100 dark:hover:bg-neutral-800/60"
+                      onClick={() => {
+                        setAddPrefsOpen(false)
+                        setModal({ mode: "add", presetKind: kind })
+                      }}
+                    >
+                      {label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         </section>
 
         <section className="min-w-0 w-full flex-1 lg:min-w-0">
@@ -352,6 +434,11 @@ export default function PlayerDiscoveryHomePage() {
 
       {modal ? (
         <FilterModal
+          key={
+            modal.mode === "edit"
+              ? `edit-${modal.filter.id}`
+              : `add-${modal.presetKind ?? "position"}`
+          }
           state={modal}
           onClose={() => setModal(null)}
           onSave={(next) => {
@@ -373,19 +460,14 @@ function FilterModal({
   onClose,
   onSave,
 }: {
-  state: { mode: "add" } | { mode: "edit"; filter: UiFilter }
+  state: { mode: "add"; presetKind?: FilterKind } | { mode: "edit"; filter: UiFilter }
   onClose: () => void
   onSave: (next: { filter: UiFilter }) => void
 }) {
   const initial =
     state.mode === "edit"
       ? state.filter
-      : ({
-          id: newId(),
-          kind: "position" as const,
-          label: "Position: Select",
-          rawValue: "",
-        } satisfies UiFilter)
+      : defaultUiFilterForPreset(state.presetKind ?? "position")
 
   const [kind, setKind] = useState<FilterKind>(initial.kind)
   const [position, setPosition] = useState(initial.kind === "position" ? initial.rawValue ?? "" : "")

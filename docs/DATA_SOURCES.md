@@ -32,6 +32,8 @@ Responses are **plain text** with:
 
 **Implementation:** `apps/api/src/services/DataParser.ts`
 
+**Discovery quality gate:** Rows that are clearly mis-parsed (e.g. `playerid` `000`, names that are only years or single-letter `R`/`L` tokens) are **not** upserted during sync and are **hidden** from `GET /players` so the home grid stays readable. See `apps/api/src/utils/playerEligibility.ts`. Re-run **`npm run sync -w @available-player-portal/api`** after upgrading; old junk rows can remain in `players` until you delete them or re-sync with the new filter (new sync skips upsert for filtered-out ids but does not delete existing rows).
+
 Examples of concepts mapped from headers:
 
 - **Transactions:** `playerid`, `tranx date`, `tranx_type`, `description` → `Transaction` + player context.

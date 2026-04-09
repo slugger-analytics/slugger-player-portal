@@ -51,6 +51,8 @@ export interface PlayerFilters {
   team?: string
   ageMin?: number
   ageMax?: number
+  /** When true, only players with at least one batting **or** pitching stat row. */
+  hasStats?: boolean
   /** Max rows to return (1–100). When set, enables pagination with {@link offset}. */
   limit?: number
   /** Skip this many rows before returning `limit` results (default 0). Ignored if `limit` is unset. */
