@@ -1,0 +1,23 @@
+# Local PostgreSQL for development. Matches default DATABASE_URL in `.env.example`.
+# Usage: docker compose -f docker-compose.dev.yml up -d
+# Then: cp .env.example .env (if needed) and npm run db:push -w @available-player-portal/api
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: available_player_portal
+    ports:
+      - "5432:5432"
+    volumes:
+      - available_player_portal_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d available_player_portal"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  available_player_portal_pg:
