@@ -11,7 +11,8 @@
  * - `buildPlayerProfile` → `GET /players/:id` (stats + embedded transaction list)
  * - `attachTransactions` / `attachStats` → optional helpers if you extend internal APIs
  *
- * **Note:** List endpoints batch-load batting/pitching by player id (two queries per list).
+ * **Note:** `listPlayerSummaries` loads stats per player (N+1 pattern); acceptable for
+ * moderate lists; optimize with batched queries if profiles grow large.
  */
 
 import type {
@@ -46,7 +47,11 @@ export class PlayerDataService {
   /** Applies DB filters, then enriches each row with a minimal stat line for the UI. */
   async listPlayerSummaries(filters: PlayerFilters): Promise<PlayerSummary[]> {
     const list = await this.players.getPlayers(filters)
-    return this.buildPlayerSummariesBatch(list)
+    const out: PlayerSummary[] = []
+    for (const p of list) {
+      out.push(await this.buildPlayerSummaryInternal(p))
+    }
+    return out
   }
 
   /** List + total row count for `GET /players` pagination (`limit` / `offset`). */
@@ -55,7 +60,10 @@ export class PlayerDataService {
       this.players.countPlayers(filters),
       this.players.getPlayers(filters),
     ])
-    const players = await this.buildPlayerSummariesBatch(list)
+    const players: PlayerSummary[] = []
+    for (const p of list) {
+      players.push(await this.buildPlayerSummaryInternal(p))
+    }
     return { players, total }
   }
 
@@ -70,30 +78,6 @@ export class PlayerDataService {
   private async buildPlayerSummaryInternal(p: Player): Promise<PlayerSummary> {
     const battingStats = await this.batting.getStatsByPlayer(p.id)
     const pitchingStats = await this.pitching.getStatsByPlayer(p.id)
-    return this.playerSummaryFromStats(p, battingStats, pitchingStats)
-  }
-
-  private async buildPlayerSummariesBatch(list: Player[]): Promise<PlayerSummary[]> {
-    if (list.length === 0) return []
-    const ids = list.map((p) => p.id)
-    const [battingById, pitchingById] = await Promise.all([
-      this.batting.getStatsByPlayerIds(ids),
-      this.pitching.getStatsByPlayerIds(ids),
-    ])
-    return list.map((p) =>
-      this.playerSummaryFromStats(
-        p,
-        battingById.get(p.id) ?? [],
-        pitchingById.get(p.id) ?? [],
-      ),
-    )
-  }
-
-  private playerSummaryFromStats(
-    p: Player,
-    battingStats: BattingStats[],
-    pitchingStats: PitchingStats[],
-  ): PlayerSummary {
     const arr = pickStatArrayForLine(battingStats, pitchingStats, p.position)
     const minimalStatLine = this.statLine.generateMinimalStatLine(arr)
     return {

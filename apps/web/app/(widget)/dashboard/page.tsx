@@ -5,7 +5,7 @@
  * Filters → query `GET /players` → cards from DB-backed API. See `lib/api.ts` + sync pipeline.
  */
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { ChevronDown, MoreVertical, Plus, RefreshCw, UserRound } from "lucide-react"
 import { PlayerCard } from "@/components/discovery/PlayerCard"
 import { fetchPlayerSummaries } from "@/lib/api"
@@ -112,7 +112,10 @@ export default function PlayerDiscoveryHomePage() {
     return q
   }, [filters, onlyWithStats])
 
-  /** Filters or DB sync → first batch only (replaces list; “Load more” appends below). */
+  const filterParamsRef = useRef(filterParams)
+  filterParamsRef.current = filterParams
+
+  /** Filter changes → first page with full loading state. */
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -138,7 +141,31 @@ export default function PlayerDiscoveryHomePage() {
     return () => {
       cancelled = true
     }
-  }, [filterParams, refreshTick])
+  }, [filterParams])
+
+  /** After “Refresh database” sync: reload first page without blanking the grid (sync button already shows progress). */
+  useEffect(() => {
+    if (refreshTick === 0) return
+    let cancelled = false
+    fetchPlayerSummaries({
+      ...filterParamsRef.current,
+      limit: DISCOVERY_HOME_PAGE_SIZE,
+      offset: 0,
+    })
+      .then(({ players: rows, total: t }) => {
+        if (!cancelled) {
+          setPlayers(rows)
+          setTotal(t)
+          setError(null)
+        }
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load players")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [refreshTick])
 
   async function handleLoadMore() {
     if (loadingMore || loading || players.length >= total) return

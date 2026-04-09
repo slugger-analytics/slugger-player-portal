@@ -10,10 +10,8 @@
  */
 
 import { createHash } from "crypto"
-import { Prisma } from "@prisma/client"
 import type { Transaction } from "../types/models"
 import { prisma } from "../lib/prisma"
-import { SYNC_UPSERT_CHUNK } from "../lib/syncBatch"
 
 /** Stable natural key for Prisma `upsert` when the feed does not supply a surrogate id. */
 function uniqueHash(t: Transaction): string {
@@ -37,25 +35,27 @@ export class TransactionRepository {
     }))
   }
 
-  /** Creates or updates by `uniqueHash`; bulk upsert per chunk for sync performance. */
+  /** Creates or updates by `uniqueHash`; safe to run on a cron without duplicating rows. */
   async upsertTransactions(txs: Transaction[]): Promise<void> {
-    if (txs.length === 0) return
-    for (let i = 0; i < txs.length; i += SYNC_UPSERT_CHUNK) {
-      const chunk = txs.slice(i, i + SYNC_UPSERT_CHUNK)
-      const rows = chunk.map((t) => {
-        const hash = uniqueHash(t)
-        const d = new Date(t.date + "T12:00:00.000Z")
-        return Prisma.sql`(${t.playerId}, ${d}::date, ${t.type}, ${t.description}, ${hash})`
+    for (const t of txs) {
+      const hash = uniqueHash(t)
+      const d = new Date(t.date + "T12:00:00.000Z")
+      await prisma.transaction.upsert({
+        where: { uniqueHash: hash },
+        create: {
+          playerId: t.playerId,
+          date: d,
+          type: t.type,
+          description: t.description,
+          uniqueHash: hash,
+        },
+        update: {
+          playerId: t.playerId,
+          date: d,
+          type: t.type,
+          description: t.description,
+        },
       })
-      await prisma.$executeRaw(Prisma.sql`
-        INSERT INTO "Transaction" ("player_id","date","type","description","unique_hash")
-        VALUES ${Prisma.join(rows)}
-        ON CONFLICT ("unique_hash") DO UPDATE SET
-          "player_id" = EXCLUDED."player_id",
-          "date" = EXCLUDED."date",
-          "type" = EXCLUDED."type",
-          "description" = EXCLUDED."description"
-      `)
     }
   }
 }

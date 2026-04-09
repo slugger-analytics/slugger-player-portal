@@ -13,8 +13,11 @@
 import { Prisma } from "@prisma/client"
 import type { Player, PlayerFilters } from "../types/models"
 import { prisma } from "../lib/prisma"
-import { SYNC_UPSERT_CHUNK } from "../lib/syncBatch"
 import { isPlayerDiscoveryEligible } from "../utils/playerEligibility"
+
+const DISCOVERY_SCAN_BATCH = 400
+/** Stop scanning after this many DB rows to avoid unbounded reads (raise if your roster is larger). */
+const DISCOVERY_SCAN_MAX_ROWS = 200_000
 
 export class PlayerRepository {
   /** Shared `where` for `findMany` / `count` (does not use `limit` / `offset`). */
@@ -60,11 +63,6 @@ export class PlayerRepository {
     return where
   }
 
-  /** Eligible rows only (`discovery_eligible` maintained on upsert + migration backfill). */
-  private withDiscoveryEligible(where: Prisma.PlayerWhereInput): Prisma.PlayerWhereInput {
-    return { AND: [where, { discoveryEligible: true }] }
-  }
-
   private mapRow(r: {
     id: string
     name: string
@@ -83,31 +81,62 @@ export class PlayerRepository {
     }
   }
 
-  /** Count rows matching filters and discovery eligibility (indexed). */
+  /**
+   * Scans DB rows in `name` order and counts those passing {@link isPlayerDiscoveryEligible}.
+   * Omits junk ids (e.g. `000`) and non-name rows from mis-parsed TBC CSV.
+   */
   async countPlayers(filters: PlayerFilters): Promise<number> {
-    const where = this.withDiscoveryEligible(this.playerWhereFromFilters(filters))
-    return prisma.player.count({ where })
+    const where = this.playerWhereFromFilters(filters)
+    let dbSkip = 0
+    let eligible = 0
+    while (dbSkip < DISCOVERY_SCAN_MAX_ROWS) {
+      const batch = await prisma.player.findMany({
+        where,
+        orderBy: { name: "asc" },
+        skip: dbSkip,
+        take: DISCOVERY_SCAN_BATCH,
+        select: { id: true, name: true },
+      })
+      if (batch.length === 0) break
+      for (const row of batch) {
+        if (isPlayerDiscoveryEligible(row)) eligible++
+      }
+      dbSkip += batch.length
+      if (batch.length < DISCOVERY_SCAN_BATCH) break
+    }
+    return eligible
   }
 
   /**
-   * Discovery list: filters + `discovery_eligible` (same rules as {@link isPlayerDiscoveryEligible}).
-   * Paginated requests use DB `skip`/`take` on `name` order.
+   * Discovery list: same filters as before, but only **eligible** players (real names, plausible ids).
+   * Pagination walks the filtered stream in `name` order (re-scans from the start for each request;
+   * fine for typical roster sizes).
    */
   async getPlayers(filters: PlayerFilters): Promise<Player[]> {
-    const where = this.withDiscoveryEligible(this.playerWhereFromFilters(filters))
-    const orderBy = { name: "asc" as const }
+    const where = this.playerWhereFromFilters(filters)
     if (filters.limit == null) {
-      const rows = await prisma.player.findMany({ where, orderBy })
-      return rows.map((r) => this.mapRow(r))
+      const rows = await prisma.player.findMany({ where, orderBy: { name: "asc" } })
+      return rows.map((r) => this.mapRow(r)).filter(isPlayerDiscoveryEligible)
     }
-    return prisma.player
-      .findMany({
+    const needEnd = (filters.offset ?? 0) + filters.limit
+    let dbSkip = 0
+    const eligible: Player[] = []
+    while (eligible.length < needEnd && dbSkip < DISCOVERY_SCAN_MAX_ROWS) {
+      const batch = await prisma.player.findMany({
         where,
-        orderBy,
-        skip: filters.offset ?? 0,
-        take: filters.limit,
+        orderBy: { name: "asc" },
+        skip: dbSkip,
+        take: DISCOVERY_SCAN_BATCH,
       })
-      .then((rows) => rows.map((r) => this.mapRow(r)))
+      if (batch.length === 0) break
+      for (const row of batch) {
+        const p = this.mapRow(row)
+        if (isPlayerDiscoveryEligible(p)) eligible.push(p)
+      }
+      dbSkip += batch.length
+      if (batch.length < DISCOVERY_SCAN_BATCH) break
+    }
+    return eligible.slice(filters.offset ?? 0, needEnd)
   }
 
   /** Lookup by primary key (`Player.id` = TBC `playerid`). */
@@ -124,27 +153,27 @@ export class PlayerRepository {
     }
   }
 
-  /** Idempotent sync: bulk upsert (one statement per chunk) for refresh/sync speed. */
+  /** Idempotent sync: same `id` updates name/team/status/age without duplicating rows. */
   async upsertPlayers(players: Player[]): Promise<void> {
-    if (players.length === 0) return
-    for (let i = 0; i < players.length; i += SYNC_UPSERT_CHUNK) {
-      const chunk = players.slice(i, i + SYNC_UPSERT_CHUNK)
-      const rows = chunk.map((p) => {
-        const discoveryEligible = isPlayerDiscoveryEligible(p)
-        return Prisma.sql`(${p.id}, ${p.name}, ${p.position || null}, ${p.team || null}, ${p.status}, ${p.age ?? null}, ${discoveryEligible}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    for (const p of players) {
+      await prisma.player.upsert({
+        where: { id: p.id },
+        create: {
+          id: p.id,
+          name: p.name,
+          position: p.position || null,
+          team: p.team || null,
+          status: p.status,
+          age: p.age ?? null,
+        },
+        update: {
+          name: p.name,
+          position: p.position || null,
+          team: p.team || null,
+          status: p.status,
+          age: p.age ?? null,
+        },
       })
-      await prisma.$executeRaw(Prisma.sql`
-        INSERT INTO "Player" ("id","name","position","team","status","age","discovery_eligible","created_at","updated_at")
-        VALUES ${Prisma.join(rows)}
-        ON CONFLICT ("id") DO UPDATE SET
-          "name" = EXCLUDED."name",
-          "position" = EXCLUDED."position",
-          "team" = EXCLUDED."team",
-          "status" = EXCLUDED."status",
-          "age" = EXCLUDED."age",
-          "discovery_eligible" = EXCLUDED."discovery_eligible",
-          "updated_at" = CURRENT_TIMESTAMP
-      `)
     }
   }
 }
