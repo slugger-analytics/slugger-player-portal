@@ -1,118 +1,74 @@
 "use client"
 
 /**
- * @file dashboard/page.tsx — Player Discovery Home (mockup-aligned).
- * Filters → query `GET /players` → cards from DB-backed API. See `lib/api.ts` + sync pipeline.
+ * @file dashboard/page.tsx — Player Discovery Home.
+ * Custom search (filters on this page) or saved profiles (built under Preferences).
  */
 
+import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
-import { ChevronDown, MoreVertical, Plus, RefreshCw, UserRound } from "lucide-react"
+import { RefreshCw } from "lucide-react"
 import { PlayerCard } from "@/components/discovery/PlayerCard"
+import { PreferenceFiltersPanel } from "@/components/discovery/PreferenceFiltersPanel"
+import type { UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
 import { fetchPlayerSummaries } from "@/lib/api"
 import { withBasePath } from "@/lib/base-path"
+import { buildPlayerListParams } from "@/lib/discovery-query"
+import { loadProfiles, type PlayerSearchProfile } from "@/lib/player-profiles"
 import type { PlayerSummary } from "@available-player-portal/shared"
 
-type FilterKind = "position" | "age" | "team" | "status"
-
-type UiFilter = {
-  id: string
-  kind: FilterKind
-  label: string
-  rawValue?: string
-  ageMode?: "lt" | "gt"
-  ageValue?: number
-}
-
-function newId(): string {
-  return globalThis.crypto.randomUUID()
-}
-
-/** Default row when opening “Add preferences” for a given type (dropdown). */
-function defaultUiFilterForPreset(preset: FilterKind): UiFilter {
-  const id = newId()
-  switch (preset) {
-    case "position":
-      return { id, kind: "position", label: "Position: Select", rawValue: "" }
-    case "age":
-      return { id, kind: "age", label: "Age: Less than 25", ageMode: "lt", ageValue: 25 }
-    case "team":
-      return { id, kind: "team", label: "Team: —", rawValue: "" }
-    case "status":
-      return { id, kind: "status", label: "Status: available", rawValue: "available" }
-  }
-}
-
-const ADD_PREFERENCE_OPTIONS: { kind: FilterKind; label: string }[] = [
-  { kind: "position", label: "Position" },
-  { kind: "age", label: "Age" },
-  { kind: "team", label: "Team" },
-  { kind: "status", label: "Status" },
-]
-
-/** Each batch from `GET /players` (2 columns × 4 rows); “Load more” appends the next batch below. */
 const DISCOVERY_HOME_PAGE_SIZE = 8
 
-/** Position filter values (aligned with API substring / P vs Non-P semantics in `PlayerRepository`). */
-const POSITION_FILTER_OPTIONS = [
-  "P",
-  "Non-P",
-  "C",
-  "1B",
-  "2B",
-  "3B",
-  "SS",
-  "OF",
-  "LF",
-  "CF",
-  "RF",
-  "IF",
-  "2B-SS",
-  "1B-3B",
-  "DH",
-] as const
-
-function filtersToQuery(filters: UiFilter[]): Record<string, string | number | boolean | undefined> {
-  const q: Record<string, string | number | boolean | undefined> = {}
-  for (const f of filters) {
-    if (f.kind === "position" && f.rawValue) q.position = f.rawValue
-    if (f.kind === "team" && f.rawValue) q.team = f.rawValue
-    if (f.kind === "status" && f.rawValue) q.status = f.rawValue
-    if (f.kind === "age" && f.ageMode && f.ageValue != null) {
-      if (f.ageMode === "lt") q.ageMax = f.ageValue
-      if (f.ageMode === "gt") q.ageMin = f.ageValue
-    }
-  }
-  return q
-}
+type SearchMode = "custom" | "profile"
 
 export default function PlayerDiscoveryHomePage() {
-  const [filters, setFilters] = useState<UiFilter[]>([])
-  /** “Stats Available” — only players with batting or pitching rows. */
-  const [onlyWithStats, setOnlyWithStats] = useState(false)
+  const [searchMode, setSearchMode] = useState<SearchMode>("custom")
+  const [customFilters, setCustomFilters] = useState<UiFilter[]>([])
+  const [customOnlyWithStats, setCustomOnlyWithStats] = useState(false)
+  const [profiles, setProfiles] = useState<PlayerSearchProfile[]>([])
+  const [selectedProfileId, setSelectedProfileId] = useState("")
   const [players, setPlayers] = useState<PlayerSummary[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  /** Bumps after a successful DB sync so the player list refetches with current filters. */
   const [refreshTick, setRefreshTick] = useState(0)
   const [syncing, setSyncing] = useState(false)
   const [syncBanner, setSyncBanner] = useState<{ variant: "success" | "error"; text: string } | null>(null)
-  const [menuFor, setMenuFor] = useState<string | null>(null)
-  const [addPrefsOpen, setAddPrefsOpen] = useState(false)
-  const [modal, setModal] = useState<
-    | { mode: "add"; presetKind?: FilterKind }
-    | { mode: "edit"; filter: UiFilter }
-    | null
-  >(null)
+
+  function refreshProfilesList() {
+    setProfiles(loadProfiles())
+  }
+
+  useEffect(() => {
+    refreshProfilesList()
+    const onVis = () => {
+      if (document.visibilityState === "visible") refreshProfilesList()
+    }
+    document.addEventListener("visibilitychange", onVis)
+    return () => document.removeEventListener("visibilitychange", onVis)
+  }, [])
+
+  useEffect(() => {
+    if (searchMode !== "profile") return
+    if (!profiles.length) {
+      setSelectedProfileId("")
+      return
+    }
+    if (!selectedProfileId || !profiles.some((p) => p.id === selectedProfileId)) {
+      setSelectedProfileId(profiles[0].id)
+    }
+  }, [searchMode, profiles, selectedProfileId])
 
   const filterParams = useMemo(() => {
-    const q = filtersToQuery(filters)
-    if (onlyWithStats) q.hasStats = true
-    return q
-  }, [filters, onlyWithStats])
+    if (searchMode === "profile") {
+      const p = profiles.find((x) => x.id === selectedProfileId)
+      if (!p) return buildPlayerListParams([], false)
+      return buildPlayerListParams(p.filters, p.onlyWithStats)
+    }
+    return buildPlayerListParams(customFilters, customOnlyWithStats)
+  }, [searchMode, profiles, selectedProfileId, customFilters, customOnlyWithStats])
 
-  /** Filters or DB sync → first batch only (replaces list; “Load more” appends below). */
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -159,35 +115,6 @@ export default function PlayerDiscoveryHomePage() {
     }
   }
 
-  useEffect(() => {
-    if (!menuFor) return
-    const onPointerDown = (e: PointerEvent) => {
-      const el = e.target as HTMLElement | null
-      if (!el) return
-      if (el.closest("[data-filter-row]")) return
-      setMenuFor(null)
-    }
-    document.addEventListener("pointerdown", onPointerDown)
-    return () => document.removeEventListener("pointerdown", onPointerDown)
-  }, [menuFor])
-
-  useEffect(() => {
-    if (!addPrefsOpen) return
-    const onPointerDown = (e: PointerEvent) => {
-      const el = e.target as HTMLElement | null
-      if (!el) return
-      if (el.closest("[data-add-prefs-root]")) return
-      setAddPrefsOpen(false)
-    }
-    document.addEventListener("pointerdown", onPointerDown)
-    return () => document.removeEventListener("pointerdown", onPointerDown)
-  }, [addPrefsOpen])
-
-  function removeFilter(id: string) {
-    setFilters((prev) => prev.filter((f) => f.id !== id))
-    setMenuFor(null)
-  }
-
   async function handleRefreshDatabase() {
     setSyncing(true)
     setSyncBanner(null)
@@ -218,6 +145,8 @@ export default function PlayerDiscoveryHomePage() {
       setSyncing(false)
     }
   }
+
+  const selectedProfile = profiles.find((p) => p.id === selectedProfileId)
 
   return (
     <main className="px-4 pb-10 sm:px-5">
@@ -250,117 +179,100 @@ export default function PlayerDiscoveryHomePage() {
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-5">
         <section className="w-full shrink-0 lg:w-[420px] lg:flex-shrink-0">
-          <div className="portal-filter-shell">
-            <div className="flex flex-col gap-2.5">
-              {filters.length === 0 ? (
-                <div className="flex min-h-12 w-full items-center justify-center rounded-portal-sm bg-portal-surface px-3 py-3 text-center shadow-portal-card">
-                  <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-                    No preferences selected.
-                  </p>
-                </div>
-              ) : (
-                filters.map((f) => (
-                  <div
-                    key={f.id}
-                    data-filter-row
-                    className="relative flex h-12 items-center gap-3 rounded-portal-sm bg-portal-surface px-3 shadow-portal-card"
-                  >
-                    <UserRound className="h-5 w-5 shrink-0 text-neutral-400" strokeWidth={1.75} />
-                    <div className="min-w-0 flex-1 text-sm font-medium text-neutral-900 dark:text-neutral-100">{f.label}</div>
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-lg p-1 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-800"
-                      aria-label="Filter actions"
-                      aria-expanded={menuFor === f.id}
-                      onClick={() => setMenuFor((cur) => (cur === f.id ? null : f.id))}
-                    >
-                      <MoreVertical className="h-5 w-5" />
-                    </button>
-                    {menuFor === f.id ? (
-                      <div
-                        data-filter-menu
-                        className="absolute right-2 top-[calc(100%+4px)] z-20 w-40 overflow-hidden rounded-portal-sm border border-neutral-200/90 bg-portal-surface py-1 shadow-portal dark:border-neutral-600/80"
-                        role="menu"
-                      >
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="block w-full px-3 py-2.5 text-left text-sm text-neutral-800 hover:bg-portal-filter-bg"
-                          onClick={() => {
-                            setModal({ mode: "edit", filter: f })
-                            setMenuFor(null)
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="block w-full px-3 py-2.5 text-left text-sm text-red-700 hover:bg-red-50"
-                          onClick={() => removeFilter(f.id)}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                ))
-              )}
-            </div>
-
-            <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-portal-sm bg-portal-surface px-3 py-2.5 shadow-portal-card">
-              <input
-                type="checkbox"
-                checked={onlyWithStats}
-                onChange={(e) => setOnlyWithStats(e.target.checked)}
-                className="h-4 w-4 shrink-0 rounded border-neutral-300 text-portal-accent focus:ring-portal-accent"
-              />
-              <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">Stats Available</span>
-            </label>
-          </div>
-
-          <div className="relative mt-4" data-add-prefs-root>
+          <div
+            className="mb-3 flex gap-1 rounded-portal-sm border border-portal-filter-border bg-portal-filter-bg/60 p-1 dark:border-neutral-600/60"
+            role="tablist"
+            aria-label="Search source"
+          >
             <button
               type="button"
-              aria-expanded={addPrefsOpen}
-              aria-haspopup="listbox"
-              aria-controls="add-preferences-menu"
-              id="add-preferences-button"
-              onClick={() => setAddPrefsOpen((o) => !o)}
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-portal-sm border border-portal-filter-border bg-portal-surface px-4 text-sm font-semibold text-[#4A5F78] shadow-portal-card transition hover:border-portal-accent hover:bg-portal-filter-bg/60 dark:text-portal-accent"
+              role="tab"
+              aria-selected={searchMode === "custom"}
+              aria-current={searchMode === "custom" ? "true" : undefined}
+              onClick={() => setSearchMode("custom")}
+              className={`relative flex-1 rounded-portal-sm px-3 py-2.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-portal-accent focus-visible:ring-offset-2 focus-visible:ring-offset-portal-filter-bg dark:focus-visible:ring-offset-neutral-900 ${
+                searchMode === "custom"
+                  ? "bg-portal-surface font-bold text-[#4A5F78] shadow-portal-card ring-2 ring-portal-accent dark:bg-neutral-800 dark:text-portal-accent dark:ring-portal-accent"
+                  : "font-medium text-neutral-500 hover:bg-white/70 hover:text-neutral-800 dark:text-neutral-500 dark:hover:bg-neutral-800/60 dark:hover:text-neutral-200"
+              }`}
             >
-              <Plus className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
-              Add preferences
-              <ChevronDown
-                className={`h-4 w-4 shrink-0 transition-transform ${addPrefsOpen ? "rotate-180" : ""}`}
-                aria-hidden
-              />
+              Custom search
             </button>
-            {addPrefsOpen ? (
-              <ul
-                id="add-preferences-menu"
-                role="listbox"
-                aria-labelledby="add-preferences-button"
-                className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-portal-sm border border-neutral-200/90 bg-portal-surface py-1 shadow-portal dark:border-neutral-600/80"
-              >
-                {ADD_PREFERENCE_OPTIONS.map(({ kind, label }) => (
-                  <li key={kind} role="none">
-                    <button
-                      type="button"
-                      role="option"
-                      className="block w-full px-3 py-2.5 text-left text-sm text-neutral-800 hover:bg-portal-filter-bg dark:text-neutral-100 dark:hover:bg-neutral-800/60"
-                      onClick={() => {
-                        setAddPrefsOpen(false)
-                        setModal({ mode: "add", presetKind: kind })
-                      }}
-                    >
-                      {label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={searchMode === "profile"}
+              aria-current={searchMode === "profile" ? "true" : undefined}
+              onClick={() => setSearchMode("profile")}
+              className={`relative flex-1 rounded-portal-sm px-3 py-2.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-portal-accent focus-visible:ring-offset-2 focus-visible:ring-offset-portal-filter-bg dark:focus-visible:ring-offset-neutral-900 ${
+                searchMode === "profile"
+                  ? "bg-portal-surface font-bold text-[#4A5F78] shadow-portal-card ring-2 ring-portal-accent dark:bg-neutral-800 dark:text-portal-accent dark:ring-portal-accent"
+                  : "font-medium text-neutral-500 hover:bg-white/70 hover:text-neutral-800 dark:text-neutral-500 dark:hover:bg-neutral-800/60 dark:hover:text-neutral-200"
+              }`}
+            >
+              Saved profile
+            </button>
           </div>
+
+          {searchMode === "custom" ? (
+            <>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                Custom preferences
+              </p>
+              <PreferenceFiltersPanel
+                filters={customFilters}
+                onFiltersChange={setCustomFilters}
+                onlyWithStats={customOnlyWithStats}
+                onOnlyWithStatsChange={setCustomOnlyWithStats}
+              />
+            </>
+          ) : (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                Saved profile
+              </p>
+              {profiles.length === 0 ? (
+                <div className="rounded-portal-sm border border-dashed border-portal-filter-border bg-portal-surface px-3 py-4 text-sm leading-relaxed text-neutral-600 dark:border-neutral-600 dark:text-neutral-400">
+                  No profiles yet.{" "}
+                  <Link href="/preferences" className="font-semibold text-[#4A5F78] underline dark:text-portal-accent">
+                    Create profiles in Preferences
+                  </Link>{" "}
+                  with the search fields you want, then return here.
+                </div>
+              ) : (
+                <>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    Profile
+                    <select
+                      value={selectedProfileId}
+                      onChange={(e) => setSelectedProfileId(e.target.value)}
+                      className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm text-neutral-900 focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600 dark:text-neutral-100"
+                    >
+                      {profiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {selectedProfile ? (
+                    <p className="mt-2 text-xs leading-relaxed text-neutral-500 dark:text-neutral-500">
+                      {selectedProfile.filters.length === 0
+                        ? "No row filters · "
+                        : `${selectedProfile.filters.length} preference row(s) · `}
+                      {selectedProfile.onlyWithStats ? "Stats required" : "Stats optional"}
+                    </p>
+                  ) : null}
+                  <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-500">
+                    <Link href="/preferences" className="font-semibold text-[#4A5F78] underline dark:text-portal-accent">
+                      Preferences
+                    </Link>{" "}
+                    — edit names and criteria
+                  </p>
+                </>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="min-w-0 w-full flex-1 lg:min-w-0">
@@ -393,10 +305,12 @@ export default function PlayerDiscoveryHomePage() {
                 <p className="mt-1 leading-relaxed text-amber-900/90">{error}</p>
               </div>
             ) : players.length === 0 ? (
-              <p className="text-sm leading-relaxed text-neutral-600">
+              <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
                 No players match these filters. If the database is empty, use{" "}
                 <strong>Refresh database</strong> above (or run{" "}
-                <code className="rounded bg-portal-chrome/80 px-1 py-0.5 text-xs dark:bg-neutral-800/80">npm run sync -w @available-player-portal/api</code>
+                <code className="rounded bg-portal-chrome/80 px-1 py-0.5 text-xs dark:bg-neutral-800/80">
+                  npm run sync -w @available-player-portal/api
+                </code>
                 ), then the list will reload.
               </p>
             ) : (
@@ -408,7 +322,9 @@ export default function PlayerDiscoveryHomePage() {
                 </div>
                 <div className="mt-5 flex flex-col items-stretch gap-3 border-t border-neutral-200/80 pt-4 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-center text-sm text-neutral-600 dark:text-neutral-400 sm:text-left">
-                    <span className="font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">{players.length}</span>
+                    <span className="font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
+                      {players.length}
+                    </span>
                     {" of "}
                     <span className="font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">{total}</span>
                     {" total results shown"}
@@ -431,198 +347,6 @@ export default function PlayerDiscoveryHomePage() {
           </div>
         </section>
       </div>
-
-      {modal ? (
-        <FilterModal
-          key={
-            modal.mode === "edit"
-              ? `edit-${modal.filter.id}`
-              : `add-${modal.presetKind ?? "position"}`
-          }
-          state={modal}
-          onClose={() => setModal(null)}
-          onSave={(next) => {
-            if (modal.mode === "edit") {
-              setFilters((prev) => prev.map((x) => (x.id === next.filter.id ? next.filter : x)))
-            } else {
-              setFilters((prev) => [...prev, next.filter])
-            }
-            setModal(null)
-          }}
-        />
-      ) : null}
     </main>
-  )
-}
-
-function FilterModal({
-  state,
-  onClose,
-  onSave,
-}: {
-  state: { mode: "add"; presetKind?: FilterKind } | { mode: "edit"; filter: UiFilter }
-  onClose: () => void
-  onSave: (next: { filter: UiFilter }) => void
-}) {
-  const initial =
-    state.mode === "edit"
-      ? state.filter
-      : defaultUiFilterForPreset(state.presetKind ?? "position")
-
-  const [kind, setKind] = useState<FilterKind>(initial.kind)
-  const [position, setPosition] = useState(initial.kind === "position" ? initial.rawValue ?? "" : "")
-  const [team, setTeam] = useState(initial.kind === "team" ? initial.rawValue ?? "" : "")
-  const [status, setStatus] = useState(initial.kind === "status" ? initial.rawValue ?? "" : "")
-  const [ageMode, setAgeMode] = useState<"lt" | "gt">(initial.kind === "age" ? initial.ageMode ?? "lt" : "lt")
-  const [ageValue, setAgeValue] = useState(
-    initial.kind === "age" && initial.ageValue != null ? String(initial.ageValue) : "",
-  )
-
-  function buildFilter(): UiFilter {
-    const id = state.mode === "edit" ? state.filter.id : newId()
-    if (kind === "position") {
-      const v = position.trim()
-      if (!v) return { id, kind, label: "Position: Select", rawValue: "" }
-      return { id, kind, label: `Position: ${v}`, rawValue: v }
-    }
-    if (kind === "team") {
-      const v = team.trim() || "—"
-      return { id, kind, label: `Team: ${v}`, rawValue: v }
-    }
-    if (kind === "status") {
-      const s = status.trim()
-      if (!s) return { id, kind, label: "Status: Select", rawValue: "" }
-      return { id, kind, label: `Status: ${s}`, rawValue: s }
-    }
-    const trimmed = ageValue.trim()
-    const n = Number(trimmed)
-    if (!trimmed || !Number.isFinite(n)) {
-      return { id, kind: "age", label: "Age: Select" }
-    }
-    return {
-      id,
-      kind: "age",
-      label: ageMode === "lt" ? `Age: Less than ${n}` : `Age: Greater than ${n}`,
-      ageMode,
-      ageValue: n,
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-[2px]"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="filter-modal-title"
-    >
-      <div className="w-full max-w-md rounded-portal border border-portal-filter-border bg-portal-surface p-5 shadow-portal">
-        <h2 id="filter-modal-title" className="text-lg font-bold text-black">
-          {state.mode === "edit" ? "Edit preferences" : "Add preferences"}
-        </h2>
-        <div className="mt-4 space-y-3">
-          <label className="block text-sm font-medium text-neutral-700">
-            Type
-            <select
-              className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25"
-              value={kind}
-              onChange={(e) => setKind(e.target.value as FilterKind)}
-            >
-              <option value="position">Position</option>
-              <option value="age">Age</option>
-              <option value="team">Team</option>
-              <option value="status">Status</option>
-            </select>
-          </label>
-
-          {kind === "position" ? (
-            <label className="block text-sm font-medium text-neutral-700">
-              Position
-              <select
-                className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25"
-                value={position}
-                onChange={(e) => setPosition(e.target.value)}
-              >
-                <option value="" disabled hidden>
-                  Select
-                </option>
-                {POSITION_FILTER_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-                {position && !POSITION_FILTER_OPTIONS.some((o) => o === position) ? (
-                  <option value={position}>{position}</option>
-                ) : null}
-              </select>
-            </label>
-          ) : null}
-
-          {kind === "team" ? (
-            <label className="block text-sm font-medium text-neutral-700">
-              Team
-              <input
-                className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25"
-                value={team}
-                onChange={(e) => setTeam(e.target.value)}
-                placeholder="e.g. Yankees"
-              />
-            </label>
-          ) : null}
-
-          {kind === "status" ? (
-            <label className="block text-sm font-medium text-neutral-700">
-              Status
-              <select
-                className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25"
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-              >
-                <option value="" disabled hidden>
-                  Select
-                </option>
-                <option value="available">available</option>
-                <option value="signed">signed</option>
-                <option value="injured">injured</option>
-              </select>
-            </label>
-          ) : null}
-
-          {kind === "age" ? (
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block text-sm font-medium text-neutral-700">
-                Compare
-                <select
-                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25"
-                  value={ageMode}
-                  onChange={(e) => setAgeMode(e.target.value as "lt" | "gt")}
-                >
-                  <option value="lt">Less than</option>
-                  <option value="gt">Greater than</option>
-                </select>
-              </label>
-              <label className="block text-sm font-medium text-neutral-700">
-                Age
-                <input
-                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25"
-                  value={ageValue}
-                  onChange={(e) => setAgeValue(e.target.value)}
-                  inputMode="numeric"
-                  placeholder="e.g. 25"
-                />
-              </label>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="mt-8 flex justify-end gap-2 border-t border-neutral-100 pt-4">
-          <button type="button" className="portal-btn-ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="button" className="portal-btn-primary" onClick={() => onSave({ filter: buildFilter() })}>
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }
