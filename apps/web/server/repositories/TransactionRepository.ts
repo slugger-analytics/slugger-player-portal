@@ -5,7 +5,7 @@
  * **Purpose:** Store one row per logical transaction line from TBC. Duplicate syncs
  * must not insert duplicates: `uniqueHash` is a SHA-256 of `(playerId|date|type|description)`.
  *
- * **Usage:** `getTransactionsByPlayer` returns rows oldest→newest for timelines;
+ * **Usage:** `getTransactionsByPlayer` returns rows newest→oldest for profile/history UI;
  * `upsertTransactions` is called from `syncPipeline.ts` with parsed feed rows.
  */
 
@@ -21,11 +21,11 @@ function uniqueHash(t: Transaction): string {
 }
 
 export class TransactionRepository {
-  /** Chronological order (ascending by `date`) for UI transaction history. */
+  /** Reverse chronological (newest first); tie-break by id for same calendar date. */
   async getTransactionsByPlayer(playerId: string): Promise<Transaction[]> {
     const rows = await prisma.transaction.findMany({
       where: { playerId },
-      orderBy: { date: "asc" },
+      orderBy: [{ date: "desc" }, { id: "desc" }],
     })
     return rows.map((r) => ({
       playerId: r.playerId,

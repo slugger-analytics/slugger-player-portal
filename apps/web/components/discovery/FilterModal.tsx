@@ -1,5 +1,6 @@
 "use client"
 
+import { EXPERIENCE_LEVEL_OPTIONS } from "@available-player-portal/shared"
 import { useState } from "react"
 import {
   ADD_PREFERENCE_OPTIONS,
@@ -30,6 +31,9 @@ export function FilterModal({
   const [ageValue, setAgeValue] = useState(
     initial.kind === "age" && initial.ageValue != null ? String(initial.ageValue) : "",
   )
+  const [expMax, setExpMax] = useState(
+    initial.kind === "experienceLevel" ? (initial.rawValue ?? "") : "",
+  )
 
   function buildFilter(): UiFilter {
     const id = state.mode === "edit" ? state.filter.id : newId()
@@ -47,6 +51,17 @@ export function FilterModal({
       if (!s) return { id, kind, label: "Status: Select", rawValue: "" }
       return { id, kind, label: `Status: ${s}`, rawValue: s }
     }
+    if (kind === "experienceLevel") {
+      const v = expMax.trim()
+      if (!v) return { id, kind, label: "Max experience level: Select", rawValue: "" }
+      const opt = EXPERIENCE_LEVEL_OPTIONS.find((o) => o.code === v)
+      return {
+        id,
+        kind,
+        label: `Max experience level: ${opt?.label ?? v}`,
+        rawValue: v,
+      }
+    }
     const trimmed = ageValue.trim()
     const n = Number(trimmed)
     if (!trimmed || !Number.isFinite(n)) {
@@ -60,6 +75,22 @@ export function FilterModal({
       ageValue: n,
     }
   }
+
+  /** Save allowed only when the user has moved off the placeholder “Select” / entered a valid value. */
+  function isPreferenceComplete(): boolean {
+    if (kind === "position") return position.trim() !== ""
+    if (kind === "team") return team.trim() !== ""
+    if (kind === "status") return status.trim() !== ""
+    if (kind === "experienceLevel") return expMax.trim() !== ""
+    if (kind === "age") {
+      const t = ageValue.trim()
+      if (t === "") return false
+      return Number.isFinite(Number(t))
+    }
+    return false
+  }
+
+  const canSave = isPreferenceComplete()
 
   return (
     <div
@@ -141,6 +172,29 @@ export function FilterModal({
             </label>
           ) : null}
 
+          {kind === "experienceLevel" ? (
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              Max experience level
+              <select
+                className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                value={expMax}
+                onChange={(e) => setExpMax(e.target.value)}
+              >
+                <option value="" disabled hidden>
+                  Select
+                </option>
+                {EXPERIENCE_LEVEL_OPTIONS.map((o) => (
+                  <option key={o.code} value={o.code}>
+                    {o.label}
+                  </option>
+                ))}
+                {expMax && !EXPERIENCE_LEVEL_OPTIONS.some((o) => o.code === expMax) ? (
+                  <option value={expMax}>{expMax}</option>
+                ) : null}
+              </select>
+            </label>
+          ) : null}
+
           {kind === "age" ? (
             <div className="grid grid-cols-2 gap-3">
               <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
@@ -172,7 +226,16 @@ export function FilterModal({
           <button type="button" className="portal-btn-ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="button" className="portal-btn-primary" onClick={() => onSave({ filter: buildFilter() })}>
+          <button
+            type="button"
+            className="portal-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!canSave}
+            title={canSave ? undefined : "Choose a value (not Select) before saving"}
+            onClick={() => {
+              if (!canSave) return
+              onSave({ filter: buildFilter() })
+            }}
+          >
             Save
           </button>
         </div>

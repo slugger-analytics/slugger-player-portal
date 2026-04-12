@@ -2,7 +2,7 @@
  * Discovery filter row model + query helper shared by home (custom) and Preferences (profiles).
  */
 
-export type FilterKind = "position" | "age" | "team" | "status"
+export type FilterKind = "position" | "age" | "team" | "status" | "experienceLevel"
 
 export type UiFilter = {
   id: string
@@ -28,6 +28,13 @@ export function defaultUiFilterForPreset(preset: FilterKind): UiFilter {
       return { id, kind: "team", label: "Team: —", rawValue: "" }
     case "status":
       return { id, kind: "status", label: "Status: available", rawValue: "available" }
+    case "experienceLevel":
+      return {
+        id,
+        kind: "experienceLevel",
+        label: "Max experience level: Select",
+        rawValue: "",
+      }
   }
 }
 
@@ -36,6 +43,7 @@ export const ADD_PREFERENCE_OPTIONS: { kind: FilterKind; label: string }[] = [
   { kind: "age", label: "Age" },
   { kind: "team", label: "Team" },
   { kind: "status", label: "Status" },
+  { kind: "experienceLevel", label: "Max experience level" },
 ]
 
 export const POSITION_FILTER_OPTIONS = [
@@ -66,6 +74,7 @@ export function filtersToQuery(filters: UiFilter[]): Record<string, string | num
       if (f.ageMode === "lt") q.ageMax = f.ageValue
       if (f.ageMode === "gt") q.ageMin = f.ageValue
     }
+    if (f.kind === "experienceLevel" && f.rawValue) q.experienceLevel = f.rawValue
   }
   return q
 }

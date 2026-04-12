@@ -13,7 +13,7 @@ import { PreferenceFiltersPanel } from "@/components/discovery/PreferenceFilters
 import type { UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
 import { fetchPlayerSummaries } from "@/lib/api"
 import { withBasePath } from "@/lib/base-path"
-import { buildPlayerListParams } from "@/lib/discovery-query"
+import { buildDiscoveryListParams } from "@/lib/discovery-query"
 import { loadProfiles, type PlayerSearchProfile } from "@/lib/player-profiles"
 import type { PlayerSummary } from "@available-player-portal/shared"
 
@@ -60,14 +60,11 @@ export default function PlayerDiscoveryHomePage() {
     }
   }, [searchMode, profiles, selectedProfileId])
 
-  const filterParams = useMemo(() => {
-    if (searchMode === "profile") {
-      const p = profiles.find((x) => x.id === selectedProfileId)
-      if (!p) return buildPlayerListParams([], false)
-      return buildPlayerListParams(p.filters, p.onlyWithStats)
-    }
-    return buildPlayerListParams(customFilters, customOnlyWithStats)
-  }, [searchMode, profiles, selectedProfileId, customFilters, customOnlyWithStats])
+  const filterParams = useMemo(
+    () =>
+      buildDiscoveryListParams(searchMode, profiles, selectedProfileId, customFilters, customOnlyWithStats),
+    [searchMode, profiles, selectedProfileId, customFilters, customOnlyWithStats],
+  )
 
   const filterParamsRef = useRef(filterParams)
   filterParamsRef.current = filterParams
@@ -78,8 +75,15 @@ export default function PlayerDiscoveryHomePage() {
     setLoading(true)
     setLoadingMore(false)
     setError(null)
+    const params = buildDiscoveryListParams(
+      searchMode,
+      profiles,
+      selectedProfileId,
+      customFilters,
+      customOnlyWithStats,
+    )
     fetchPlayerSummaries({
-      ...filterParams,
+      ...params,
       limit: DISCOVERY_HOME_PAGE_SIZE,
       offset: 0,
     })
@@ -98,7 +102,7 @@ export default function PlayerDiscoveryHomePage() {
     return () => {
       cancelled = true
     }
-  }, [filterParams])
+  }, [searchMode, profiles, selectedProfileId, customFilters, customOnlyWithStats])
 
   /** After “Refresh database” sync: reload first page without blanking the grid (sync button already shows progress). */
   useEffect(() => {

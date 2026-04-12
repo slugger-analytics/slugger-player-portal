@@ -27,6 +27,8 @@ import { PlayerRepository } from "../repositories/PlayerRepository"
 import { TransactionRepository } from "../repositories/TransactionRepository"
 import { BattingStatsRepository } from "../repositories/BattingStatsRepository"
 import { PitchingStatsRepository } from "../repositories/PitchingStatsRepository"
+import { mergeExperienceLevels } from "@available-player-portal/shared"
+
 import type { Player } from "../types/models"
 import { isPlayerDiscoveryEligible } from "../utils/playerEligibility"
 
@@ -47,6 +49,7 @@ function mergePlayers(lists: Player[][]): Player[] {
         position: p.position && p.position !== "—" ? p.position : prev.position,
         status: p.status !== "available" ? p.status : prev.status,
         age: p.age ?? prev.age,
+        experienceLevel: mergeExperienceLevels(prev.experienceLevel, p.experienceLevel),
       }
       map.set(p.id, merged)
     }

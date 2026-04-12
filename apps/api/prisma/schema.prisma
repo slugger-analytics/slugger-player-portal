@@ -11,6 +11,16 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// Highest level of play (low → high); stored on `Player.experience_level`.
+enum ExperienceLevel {
+  ROOKIE
+  A
+  A_PLUS
+  AA
+  AAA
+  MLB
+}
+
 // Core player row keyed by TBC player id (string). Optional age supports discovery filters.
 model Player {
   id                 String   @id
@@ -19,6 +29,7 @@ model Player {
   team               String?
   status             String   @default("available")
   age                Int?
+  experienceLevel    ExperienceLevel? @map("experience_level")
   /// Discovery list filter; set on upsert from isPlayerDiscoveryEligible (see playerEligibility.ts).
   discoveryEligible  Boolean  @default(true) @map("discovery_eligible")
   createdAt          DateTime @default(now()) @map("created_at")
@@ -29,6 +40,7 @@ model Player {
   pitchingStats PitchingStat[]
 
   @@index([discoveryEligible, name])
+  @@index([experienceLevel])
 }
 
 // Transaction feed lines; uniqueHash prevents duplicate rows from repeated sync runs.

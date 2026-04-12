@@ -5,6 +5,7 @@
 
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { experienceLevelDisplayLabel } from "@available-player-portal/shared"
 import type { BattingStats, PitchingStats } from "@available-player-portal/shared"
 import { TransactionHistoryView } from "@/components/discovery/TransactionHistoryView"
 import { PlayerDetailFavoriteBar } from "@/components/favorites/PlayerDetailFavoriteBar"
@@ -55,6 +56,10 @@ export default async function PlayerDetailPage({ params }: Props) {
               <span className="text-neutral-500">Age:</span> {p.age}
             </span>
           ) : null}
+          <span>
+            <span className="text-neutral-500">Max experience level:</span>{" "}
+            {experienceLevelDisplayLabel(p.experienceLevel)}
+          </span>
         </div>
       </header>
 

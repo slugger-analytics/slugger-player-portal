@@ -17,6 +17,8 @@
  */
 
 import { createHash } from "crypto"
+import { extractHighLevelRawCell, parseExperienceLevelFromText } from "@available-player-portal/shared"
+
 import type { BattingStats, PitchingStats, Player, Transaction } from "../types/models"
 
 /** Split TBC feed into logical rows (CSV lines separated by `<br>`). */
@@ -53,7 +55,8 @@ export function parseCsvLine(line: string): string[] {
 }
 
 /** Normalizes header labels like `tranx date` or `Bavg` to camelCase keys. */
-function toCamelCase(key: string): string {
+function toCamelCase(raw: string): string {
+  const key = raw.replace(/^\uFEFF/, "").trim()
   const k = key.replace(/[^a-zA-Z0-9]+/g, " ").trim().split(/\s+/)
   if (k.length === 0) return key
   return k
@@ -63,6 +66,17 @@ function toCamelCase(key: string): string {
       return lower.charAt(0).toUpperCase() + lower.slice(1)
     })
     .join("")
+}
+
+/**
+ * TBC transaction feed places `highlevel` immediately before `playerid`:
+ * `...,age,highlevel,playerid` (values: MLB, AA, A+, A, AAA, Rk, …).
+ */
+function findHighLevelColumnIndex(header: string[]): number {
+  return header.findIndex((h) => {
+    const k = toCamelCase(h)
+    return k === "highlevel" || k === "highLevel" || k === "highestLevel"
+  })
 }
 
 function parseHeaderRow(line: string): string[] {
@@ -125,12 +139,16 @@ export class DataParser {
     const rows = splitFeedRows(raw)
     if (rows.length < 2) return []
     const header = parseHeaderRow(rows[0])
+    const highlevelCol = findHighLevelColumnIndex(header)
     const out: Player[] = []
     for (let i = 1; i < rows.length; i++) {
       const cells = parseCsvLine(rows[i])
       if (cells.length < header.length) continue
       const r = rowToRecord(header, cells)
       const rec: Record<string, unknown> = { ...r }
+      if (highlevelCol >= 0 && highlevelCol < cells.length) {
+        rec.highlevel = String(cells[highlevelCol] ?? "").trim()
+      }
       out.push(this.normalizePlayer(rec))
     }
     return out
@@ -258,6 +276,17 @@ export class DataParser {
     const status = statusRaw ? mapStatusShort(statusRaw) : "available"
     const ageRaw = s("age") || s("Age")
     const age = ageRaw ? parseAgeCell(ageRaw) : null
+    const levelCell =
+      extractHighLevelRawCell(raw) ||
+      s("level") ||
+      s("orgLevel") ||
+      s("orglevel") ||
+      s("league") ||
+      ""
+    let experienceLevel = levelCell ? parseExperienceLevelFromText(levelCell) : undefined
+    if (experienceLevel == null && team) {
+      experienceLevel = parseExperienceLevelFromText(team)
+    }
     if (!id) {
       id = `anon-${createHash("sha256").update(`${name}|${team}`).digest("hex").slice(0, 16)}`
     }
@@ -268,6 +297,7 @@ export class DataParser {
       team: team || "—",
       status,
       age: age ?? undefined,
+      experienceLevel,
     }
   }
 }

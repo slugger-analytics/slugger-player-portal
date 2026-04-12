@@ -2,7 +2,7 @@
 
 /**
  * @file TransactionHistoryView.tsx
- * @description Client timeline — loads `GET /players/:id/transactions` (DB-backed, chronological).
+ * @description Client timeline — loads `GET /players/:id/transactions` (DB-backed, newest first).
  */
 
 import { useEffect, useState } from "react"

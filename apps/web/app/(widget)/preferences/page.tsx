@@ -67,8 +67,9 @@ export default function PreferencesPage() {
           </Link>
           <h1 className="text-3xl font-bold tracking-tight text-black dark:text-neutral-100">Preferences</h1>
           <p className="mt-1 max-w-xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-            Create <strong>player profiles</strong> with manual search criteria (position, age, team, status, and whether
-            stats are required). Use them on the home page under <strong>Saved profile</strong>.
+            Create <strong>player profiles</strong> with manual search criteria (position, age, team, status, max
+            experience level, and whether stats are required). Use them on the home page under{" "}
+            <strong>Saved profile</strong>.
           </p>
         </div>
         {!editor ? (

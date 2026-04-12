@@ -18,6 +18,8 @@ export interface Player {
   team: string
   status: PlayerStatus | string
   age?: number | null
+  /** Highest level reached; Prisma enum string e.g. `AAA`, `MLB`. */
+  experienceLevel?: string | null
 }
 
 export interface Transaction {
@@ -51,12 +53,23 @@ export interface PlayerFilters {
   team?: string
   ageMin?: number
   ageMax?: number
+  /**
+   * **Exact** match on highest level only (`A_PLUS` → only A+, `MLB` → only MLB). No ranges.
+   * Query: `experienceLevel`, `experience_level`, `highlevel`, or `highLevel`.
+   */
+  experienceLevel?: string
   /** When true, only players with at least one batting **or** pitching stat row. */
   hasStats?: boolean
   /** Max rows to return (1–100). When set, enables pagination with {@link offset}. */
   limit?: number
   /** Skip this many rows before returning `limit` results (default 0). Ignored if `limit` is unset. */
   offset?: number
+  /** Discovery list ordering. Default `name`. */
+  sortBy?: "name" | "experienceLevel"
+  /**
+   * `asc` | `desc`. When omitted: `asc` for name, `desc` for experience level (MLB first).
+   */
+  sortDir?: "asc" | "desc"
 }
 
 /** API response for GET /players */
@@ -66,6 +79,8 @@ export interface PlayerSummary {
   position: string
   team: string
   status: string
+  /** Highest level reached (`ExperienceLevel` enum code); optional when unknown. */
+  experienceLevel?: string | null
   minimalStatLine: string
   mostRecentTeam: string
   imageUrl?: string | null

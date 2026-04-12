@@ -86,6 +86,7 @@ export class PlayerDataService {
       position: p.position,
       team: p.team,
       status: p.status,
+      experienceLevel: p.experienceLevel ?? null,
       minimalStatLine,
       mostRecentTeam: p.team,
       imageUrl: null,

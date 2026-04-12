@@ -2,7 +2,7 @@
 
 /**
  * @file PlayerCard.tsx
- * @description Discovery result card: grey placeholder avatar, name, team, stat line from API.
+ * @description Discovery result card: grey placeholder avatar, name, team, stat line (level on profile page).
  * Data: `PlayerSummary` from `GET /players` — fully driven by the sync pipeline + DB.
  */
 

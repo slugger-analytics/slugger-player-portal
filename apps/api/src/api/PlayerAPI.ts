@@ -3,7 +3,7 @@
  * @description Express router for **Player Discovery** REST endpoints.
  *
  * **Routes (mounted at `/players` in `index.ts`):**
- * - `GET /` — query: `position`, `status`, `team`, `ageMin`, `ageMax`, `hasStats`, `limit`, `offset` → `{ players, total }`
+ * - `GET /` — query: `experienceLevel` (exact enum only), `experience_level`, `highlevel`, `highLevel`, …
  * - `GET /:id` — full `PlayerProfile` (stats + embedded transactions)
  * - `GET /:id/transactions` — `Transaction[]` only (used by the web timeline component)
  *
@@ -14,6 +14,7 @@
  * do not import repositories in Next.js code.
  */
 
+import { parseExperienceLevelFilterInput } from "@available-player-portal/shared"
 import { Router } from "express"
 import type { PlayerFilters } from "../types/models"
 import { PlayerDataService } from "../services/PlayerDataService"
@@ -79,7 +80,68 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     }
   }
 
-  return { position, status, team, ageMin, ageMax, hasStats, limit, offset }
+  const { value: experienceLevel, invalidRaw: exactInvalid } = parseExactExperienceLevelQuery(query)
+
+  if (exactInvalid) {
+    throw new Error(`Invalid experienceLevel: ${exactInvalid}`)
+  }
+
+  let sortBy: PlayerFilters["sortBy"]
+  const sortByRaw = firstString(query.sortBy)?.trim().toLowerCase()
+  if (sortByRaw != null && sortByRaw !== "") {
+    if (sortByRaw === "name") sortBy = "name"
+    else if (
+      sortByRaw === "experiencelevel" ||
+      sortByRaw === "experience_level" ||
+      sortByRaw === "highlevel" ||
+      sortByRaw === "high_level"
+    ) {
+      sortBy = "experienceLevel"
+    } else {
+      throw new Error("Invalid sortBy")
+    }
+  }
+
+  let sortDir: "asc" | "desc" | undefined
+  const sortDirRaw = firstString(query.sortDir)?.trim().toLowerCase()
+  if (sortDirRaw != null && sortDirRaw !== "") {
+    if (sortDirRaw === "asc" || sortDirRaw === "desc") {
+      sortDir = sortDirRaw
+    } else {
+      throw new Error("Invalid sortDir")
+    }
+  }
+
+  return {
+    position,
+    status,
+    team,
+    ageMin,
+    ageMax,
+    experienceLevel,
+    hasStats,
+    limit,
+    offset,
+    sortBy,
+    sortDir,
+  }
+}
+
+/** Exact level: UI sends `experienceLevel`; TBC-style URLs often use `highlevel` / `highLevel`. */
+function parseExactExperienceLevelQuery(query: Record<string, unknown>): {
+  value: string | undefined
+  invalidRaw: string | undefined
+} {
+  // Same filter; multiple keys for HTTP clients (camelCase, snake_case, TBC-style).
+  const keys = ["experienceLevel", "experience_level", "highlevel", "highLevel"] as const
+  for (const key of keys) {
+    const raw = firstString(query[key])
+    if (raw == null || raw.trim() === "") continue
+    const parsed = parseExperienceLevelFilterInput(raw)
+    if (parsed) return { value: parsed, invalidRaw: undefined }
+    return { value: undefined, invalidRaw: raw }
+  }
+  return { value: undefined, invalidRaw: undefined }
 }
 
 /** Factory so tests can mount the router without starting the full app. */
