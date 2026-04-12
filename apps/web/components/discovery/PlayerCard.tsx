@@ -16,12 +16,15 @@ type Props = {
   player: PlayerSummary
   /** Merged onto the card link (e.g. `!max-w-none min-w-0` for grid layouts). */
   className?: string
+  /** Discovery home saves search state before opening a profile so Back can restore it. */
+  onBeforeNavigate?: () => void
 }
 
-export function PlayerCard({ player, className = "" }: Props) {
+export function PlayerCard({ player, className = "", onBeforeNavigate }: Props) {
   return (
     <Link
       href={`/players/${encodeURIComponent(player.id)}`}
+      onClick={() => onBeforeNavigate?.()}
       className={`group relative flex w-full min-w-0 shrink-0 items-start gap-3 rounded-portal border border-neutral-200/80 bg-portal-surface p-3 shadow-portal-card transition hover:border-portal-filter-border hover:shadow-portal dark:border-neutral-600/50 ${className}`}
     >
       <div className="absolute right-1 top-1 z-10 flex items-center gap-0.5">

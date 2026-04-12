@@ -6,6 +6,7 @@ import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react"
 import { PreferenceFiltersPanel } from "@/components/discovery/PreferenceFiltersPanel"
 import { newId, type UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
 import { profileSummaryLine } from "@/lib/discovery-query"
+import { clearDiscoverySnapshot } from "@/lib/discovery-session"
 import { deleteProfile, loadProfiles, type PlayerSearchProfile, upsertProfile } from "@/lib/player-profiles"
 
 export default function PreferencesPage() {
@@ -17,6 +18,10 @@ export default function PreferencesPage() {
 
   useEffect(() => {
     setProfiles(loadProfiles())
+  }, [])
+
+  useEffect(() => {
+    clearDiscoverySnapshot()
   }, [])
 
   function openNew() {

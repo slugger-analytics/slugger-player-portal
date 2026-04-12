@@ -70,6 +70,21 @@ export interface PlayerFilters {
    * `asc` | `desc`. When omitted: `asc` for name, `desc` for experience level (MLB first).
    */
   sortDir?: "asc" | "desc"
+  /**
+   * Rolling window from now: only players with at least one transaction whose `date` falls in
+   * `[now − N days, now]`. List order is by most recent transaction first (then name).
+   * Allowed values: {@link LAST_TRANSACTION_DAYS_OPTIONS}.
+   */
+  lastTransactionDays?: number
+}
+
+/** Allowed “Last X days” preference values (transaction recency window). */
+export const LAST_TRANSACTION_DAYS_OPTIONS = [7, 14, 21, 30, 45, 60] as const
+
+export type LastTransactionDaysOption = (typeof LAST_TRANSACTION_DAYS_OPTIONS)[number]
+
+export function isLastTransactionDaysOption(n: number): n is LastTransactionDaysOption {
+  return (LAST_TRANSACTION_DAYS_OPTIONS as readonly number[]).includes(n)
 }
 
 /** API response for GET /players */

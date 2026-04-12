@@ -2,7 +2,13 @@
  * Discovery filter row model + query helper shared by home (custom) and Preferences (profiles).
  */
 
-export type FilterKind = "position" | "age" | "team" | "status" | "experienceLevel"
+export type FilterKind =
+  | "position"
+  | "age"
+  | "team"
+  | "status"
+  | "experienceLevel"
+  | "lastTransactionDays"
 
 export type UiFilter = {
   id: string
@@ -35,6 +41,13 @@ export function defaultUiFilterForPreset(preset: FilterKind): UiFilter {
         label: "Max experience level: Select",
         rawValue: "",
       }
+    case "lastTransactionDays":
+      return {
+        id,
+        kind: "lastTransactionDays",
+        label: "Last X days: Select",
+        rawValue: "",
+      }
   }
 }
 
@@ -44,6 +57,7 @@ export const ADD_PREFERENCE_OPTIONS: { kind: FilterKind; label: string }[] = [
   { kind: "team", label: "Team" },
   { kind: "status", label: "Status" },
   { kind: "experienceLevel", label: "Max experience level" },
+  { kind: "lastTransactionDays", label: "Last X days" },
 ]
 
 export const POSITION_FILTER_OPTIONS = [
@@ -75,6 +89,10 @@ export function filtersToQuery(filters: UiFilter[]): Record<string, string | num
       if (f.ageMode === "gt") q.ageMin = f.ageValue
     }
     if (f.kind === "experienceLevel" && f.rawValue) q.experienceLevel = f.rawValue
+    if (f.kind === "lastTransactionDays" && f.rawValue) {
+      const n = Number(f.rawValue)
+      if (Number.isInteger(n)) q.lastTransactionDays = n
+    }
   }
   return q
 }

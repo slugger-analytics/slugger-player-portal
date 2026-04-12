@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react"
 import { PlayerCard } from "@/components/discovery/PlayerCard"
 import { buildPlayerListParams } from "@/lib/discovery-query"
 import { fetchPlayerSummaries, fetchPlayerSummaryForCard } from "@/lib/api"
+import { clearDiscoverySnapshot } from "@/lib/discovery-session"
 import { loadProfiles, type PlayerSearchProfile } from "@/lib/player-profiles"
 import {
   markProfilePlayersSeen,
@@ -24,6 +25,11 @@ type ProfileSectionState = {
 
 export default function UpdatesPage() {
   const { watchIds } = useUpdatesWatch()
+
+  useEffect(() => {
+    clearDiscoverySnapshot()
+  }, [])
+
   const [profiles, setProfiles] = useState<PlayerSearchProfile[]>([])
   const [byProfile, setByProfile] = useState<Record<string, ProfileSectionState>>({})
   const [watchedSummaries, setWatchedSummaries] = useState<PlayerSummary[]>([])

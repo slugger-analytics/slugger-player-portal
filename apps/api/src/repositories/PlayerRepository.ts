@@ -10,7 +10,7 @@
  * directly; keep HTTP layer thin).
  */
 
-import { isExperienceLevelCode } from "@available-player-portal/shared"
+import { isExperienceLevelCode, isLastTransactionDaysOption } from "@available-player-portal/shared"
 import type { ExperienceLevel } from "@prisma/client"
 import { Prisma } from "@prisma/client"
 import type { Player, PlayerFilters } from "../types/models"
@@ -23,7 +23,10 @@ export class PlayerRepository {
    * Builds flat `AND` clauses so `OR`/`NOT` (position) never nest inside a sibling object
    * with `experienceLevel` — Prisma can generate wrong SQL for that shape.
    */
-  private collectDiscoveryWhereClauses(filters: PlayerFilters): Prisma.PlayerWhereInput[] {
+  private collectDiscoveryWhereClauses(
+    filters: PlayerFilters,
+    opts?: { omitLastTransactionRecency?: boolean },
+  ): Prisma.PlayerWhereInput[] {
     const clauses: Prisma.PlayerWhereInput[] = []
     if (filters.position) {
       const raw = filters.position.trim()
@@ -65,6 +68,16 @@ export class PlayerRepository {
         OR: [{ battingStats: { some: {} } }, { pitchingStats: { some: {} } }],
       })
     }
+    if (opts?.omitLastTransactionRecency !== true && filters.lastTransactionDays != null) {
+      if (!isLastTransactionDaysOption(filters.lastTransactionDays)) {
+        throw new Error(`Invalid lastTransactionDays: ${filters.lastTransactionDays}`)
+      }
+      const cutoff = new Date()
+      cutoff.setTime(cutoff.getTime() - filters.lastTransactionDays * 24 * 60 * 60 * 1000)
+      clauses.push({
+        transactions: { some: { date: { gte: cutoff } } },
+      })
+    }
     return clauses
   }
 
@@ -75,10 +88,49 @@ export class PlayerRepository {
   }
 
   /** Eligible rows only (`discovery_eligible` maintained on upsert + migration backfill). */
-  private withDiscoveryEligible(filters: PlayerFilters): Prisma.PlayerWhereInput {
-    const clauses = this.collectDiscoveryWhereClauses(filters)
+  private withDiscoveryEligible(
+    filters: PlayerFilters,
+    opts?: { omitLastTransactionRecency?: boolean },
+  ): Prisma.PlayerWhereInput {
+    const clauses = this.collectDiscoveryWhereClauses(filters, opts)
     clauses.push({ discoveryEligible: true })
     return this.combineWhereClauses(clauses)
+  }
+
+  private transactionRecencyCutoff(filters: PlayerFilters): Date {
+    const n = filters.lastTransactionDays!
+    if (!isLastTransactionDaysOption(n)) {
+      throw new Error(`Invalid lastTransactionDays: ${n}`)
+    }
+    const cutoff = new Date()
+    cutoff.setTime(cutoff.getTime() - n * 24 * 60 * 60 * 1000)
+    return cutoff
+  }
+
+  /**
+   * `findMany` cannot order by max(transaction.date); use grouped transactions then hydrate players.
+   */
+  private async getPlayersByRecentTransaction(filters: PlayerFilters): Promise<Player[]> {
+    const cutoff = this.transactionRecencyCutoff(filters)
+    const playerWhere = this.withDiscoveryEligible(filters, { omitLastTransactionRecency: true })
+    const groups = await prisma.transaction.groupBy({
+      by: ["playerId"],
+      where: {
+        date: { gte: cutoff },
+        player: { is: playerWhere },
+      },
+      _max: { date: true },
+      /** Tie-break so skip/take pagination is stable when many players share the same max date. */
+      orderBy: [{ _max: { date: "desc" } }, { playerId: "asc" }],
+      ...(filters.limit != null
+        ? { skip: filters.offset ?? 0, take: filters.limit }
+        : {}),
+    })
+    const ids = groups.map((g) => g.playerId)
+    if (ids.length === 0) return []
+    const rows = await prisma.player.findMany({ where: { id: { in: ids } } })
+    const byId = new Map(rows.map((r) => [r.id, r]))
+    return ids.map((id) => byId.get(id)).filter((r): r is NonNullable<typeof r> => r != null).map((r) => this.mapRow(r))
   }
 
   private orderByFromFilters(filters: PlayerFilters): Prisma.PlayerOrderByWithRelationInput[] {
@@ -125,6 +177,9 @@ export class PlayerRepository {
    * Paginated requests use DB `skip`/`take` on `name` order.
    */
   async getPlayers(filters: PlayerFilters): Promise<Player[]> {
+    if (filters.lastTransactionDays != null) {
+      return this.getPlayersByRecentTransaction(filters)
+    }
     const where = this.withDiscoveryEligible(filters)
     const orderBy = this.orderByFromFilters(filters)
     if (filters.limit == null) {

@@ -3,7 +3,8 @@
  * @description Express router for **Player Discovery** REST endpoints.
  *
  * **Routes (mounted at `/players` in `index.ts`):**
- * - `GET /` — query: `experienceLevel` (exact enum only), `experience_level`, `highlevel`, `highLevel`, …
+ * - `GET /` — query: `experienceLevel` (exact enum only), `experience_level`, `highlevel`, `highLevel`,
+ *   `lastTransactionDays` (7 | 14 | 21 | 30 | 45 | 60), …
  * - `GET /:id` — full `PlayerProfile` (stats + embedded transactions)
  * - `GET /:id/transactions` — `Transaction[]` only (used by the web timeline component)
  *
@@ -14,7 +15,7 @@
  * do not import repositories in Next.js code.
  */
 
-import { parseExperienceLevelFilterInput } from "@available-player-portal/shared"
+import { isLastTransactionDaysOption, parseExperienceLevelFilterInput } from "@available-player-portal/shared"
 import { Router } from "express"
 import type { PlayerFilters } from "../types/models"
 import { PlayerDataService } from "../services/PlayerDataService"
@@ -112,6 +113,18 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     }
   }
 
+  let lastTransactionDays: number | undefined
+  const ltdRaw =
+    firstString(query.lastTransactionDays) ??
+    (typeof query.lastTransactionDays === "number" ? String(query.lastTransactionDays) : undefined)
+  if (ltdRaw != null && ltdRaw !== "") {
+    const n = Number(ltdRaw)
+    if (!Number.isInteger(n) || !isLastTransactionDaysOption(n)) {
+      throw new Error("Invalid lastTransactionDays")
+    }
+    lastTransactionDays = n
+  }
+
   return {
     position,
     status,
@@ -124,6 +137,7 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     offset,
     sortBy,
     sortDir,
+    lastTransactionDays,
   }
 }
 

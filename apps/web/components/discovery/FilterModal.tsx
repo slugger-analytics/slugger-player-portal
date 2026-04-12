@@ -1,6 +1,6 @@
 "use client"
 
-import { EXPERIENCE_LEVEL_OPTIONS } from "@available-player-portal/shared"
+import { EXPERIENCE_LEVEL_OPTIONS, LAST_TRANSACTION_DAYS_OPTIONS } from "@available-player-portal/shared"
 import { useState } from "react"
 import {
   ADD_PREFERENCE_OPTIONS,
@@ -34,6 +34,9 @@ export function FilterModal({
   const [expMax, setExpMax] = useState(
     initial.kind === "experienceLevel" ? (initial.rawValue ?? "") : "",
   )
+  const [lastTxDays, setLastTxDays] = useState(
+    initial.kind === "lastTransactionDays" ? (initial.rawValue ?? "") : "",
+  )
 
   function buildFilter(): UiFilter {
     const id = state.mode === "edit" ? state.filter.id : newId()
@@ -62,6 +65,11 @@ export function FilterModal({
         rawValue: v,
       }
     }
+    if (kind === "lastTransactionDays") {
+      const v = lastTxDays.trim()
+      if (!v) return { id, kind, label: "Last X days: Select", rawValue: "" }
+      return { id, kind, label: `Last ${v} days`, rawValue: v }
+    }
     const trimmed = ageValue.trim()
     const n = Number(trimmed)
     if (!trimmed || !Number.isFinite(n)) {
@@ -82,6 +90,7 @@ export function FilterModal({
     if (kind === "team") return team.trim() !== ""
     if (kind === "status") return status.trim() !== ""
     if (kind === "experienceLevel") return expMax.trim() !== ""
+    if (kind === "lastTransactionDays") return lastTxDays.trim() !== ""
     if (kind === "age") {
       const t = ageValue.trim()
       if (t === "") return false
@@ -190,6 +199,30 @@ export function FilterModal({
                 ))}
                 {expMax && !EXPERIENCE_LEVEL_OPTIONS.some((o) => o.code === expMax) ? (
                   <option value={expMax}>{expMax}</option>
+                ) : null}
+              </select>
+            </label>
+          ) : null}
+
+          {kind === "lastTransactionDays" ? (
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              Last X days
+              <select
+                className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                value={lastTxDays}
+                onChange={(e) => setLastTxDays(e.target.value)}
+              >
+                <option value="" disabled hidden>
+                  Select
+                </option>
+                {LAST_TRANSACTION_DAYS_OPTIONS.map((d) => (
+                  <option key={d} value={String(d)}>
+                    {d}
+                  </option>
+                ))}
+                {lastTxDays &&
+                !LAST_TRANSACTION_DAYS_OPTIONS.some((d) => String(d) === lastTxDays) ? (
+                  <option value={lastTxDays}>{lastTxDays}</option>
                 ) : null}
               </select>
             </label>
