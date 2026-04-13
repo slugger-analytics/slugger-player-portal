@@ -6,18 +6,34 @@
  */
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { RefreshCw } from "lucide-react"
 import { PlayerCard } from "@/components/discovery/PlayerCard"
 import { PreferenceFiltersPanel } from "@/components/discovery/PreferenceFiltersPanel"
 import type { UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
 import { fetchPlayerSummaries } from "@/lib/api"
 import { withBasePath } from "@/lib/base-path"
-import { buildPlayerListParams } from "@/lib/discovery-query"
+import { buildDiscoveryListParams } from "@/lib/discovery-query"
+import {
+  saveDiscoverySnapshotForPlayerNavigation,
+  takeDiscoverySnapshot,
+} from "@/lib/discovery-session"
 import { loadProfiles, type PlayerSearchProfile } from "@/lib/player-profiles"
 import type { PlayerSummary } from "@available-player-portal/shared"
 
 const DISCOVERY_HOME_PAGE_SIZE = 8
+
+/** Defensive: stable-ordered API responses should not repeat ids; keeps React keys unique. */
+function dedupePlayersById(players: PlayerSummary[]): PlayerSummary[] {
+  const seen = new Set<string>()
+  const out: PlayerSummary[] = []
+  for (const p of players) {
+    if (seen.has(p.id)) continue
+    seen.add(p.id)
+    out.push(p)
+  }
+  return out
+}
 
 type SearchMode = "custom" | "profile"
 
@@ -35,6 +51,19 @@ export default function PlayerDiscoveryHomePage() {
   const [refreshTick, setRefreshTick] = useState(0)
   const [syncing, setSyncing] = useState(false)
   const [syncBanner, setSyncBanner] = useState<{ variant: "success" | "error"; text: string } | null>(null)
+  /** False until client applies optional return-from-profile snapshot (avoids fetch with default then snapshot). */
+  const [discoveryReady, setDiscoveryReady] = useState(false)
+
+  useLayoutEffect(() => {
+    const snap = takeDiscoverySnapshot()
+    if (snap) {
+      setSearchMode(snap.searchMode)
+      setCustomFilters(snap.customFilters)
+      setCustomOnlyWithStats(snap.customOnlyWithStats)
+      setSelectedProfileId(snap.selectedProfileId)
+    }
+    setDiscoveryReady(true)
+  }, [])
 
   function refreshProfilesList() {
     setProfiles(loadProfiles())
@@ -60,28 +89,37 @@ export default function PlayerDiscoveryHomePage() {
     }
   }, [searchMode, profiles, selectedProfileId])
 
-  const filterParams = useMemo(() => {
-    if (searchMode === "profile") {
-      const p = profiles.find((x) => x.id === selectedProfileId)
-      if (!p) return buildPlayerListParams([], false)
-      return buildPlayerListParams(p.filters, p.onlyWithStats)
-    }
-    return buildPlayerListParams(customFilters, customOnlyWithStats)
-  }, [searchMode, profiles, selectedProfileId, customFilters, customOnlyWithStats])
+  const filterParams = useMemo(
+    () =>
+      buildDiscoveryListParams(searchMode, profiles, selectedProfileId, customFilters, customOnlyWithStats),
+    [searchMode, profiles, selectedProfileId, customFilters, customOnlyWithStats],
+  )
 
+  const filterParamsRef = useRef(filterParams)
+  filterParamsRef.current = filterParams
+
+  /** Filter changes → first page with full loading state. */
   useEffect(() => {
+    if (!discoveryReady) return
     let cancelled = false
     setLoading(true)
     setLoadingMore(false)
     setError(null)
+    const params = buildDiscoveryListParams(
+      searchMode,
+      profiles,
+      selectedProfileId,
+      customFilters,
+      customOnlyWithStats,
+    )
     fetchPlayerSummaries({
-      ...filterParams,
+      ...params,
       limit: DISCOVERY_HOME_PAGE_SIZE,
       offset: 0,
     })
       .then(({ players: rows, total: t }) => {
         if (!cancelled) {
-          setPlayers(rows)
+          setPlayers(dedupePlayersById(rows))
           setTotal(t)
         }
       })
@@ -94,7 +132,31 @@ export default function PlayerDiscoveryHomePage() {
     return () => {
       cancelled = true
     }
-  }, [filterParams, refreshTick])
+  }, [discoveryReady, searchMode, profiles, selectedProfileId, customFilters, customOnlyWithStats])
+
+  /** After “Refresh database” sync: reload first page without blanking the grid (sync button already shows progress). */
+  useEffect(() => {
+    if (refreshTick === 0) return
+    let cancelled = false
+    fetchPlayerSummaries({
+      ...filterParamsRef.current,
+      limit: DISCOVERY_HOME_PAGE_SIZE,
+      offset: 0,
+    })
+      .then(({ players: rows, total: t }) => {
+        if (!cancelled) {
+          setPlayers(dedupePlayersById(rows))
+          setTotal(t)
+          setError(null)
+        }
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load players")
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [refreshTick])
 
   async function handleLoadMore() {
     if (loadingMore || loading || players.length >= total) return
@@ -106,7 +168,16 @@ export default function PlayerDiscoveryHomePage() {
         limit: DISCOVERY_HOME_PAGE_SIZE,
         offset: players.length,
       })
-      setPlayers((prev) => [...prev, ...rows])
+      setPlayers((prev) => {
+        const seen = new Set(prev.map((p) => p.id))
+        const merged = [...prev]
+        for (const p of rows) {
+          if (seen.has(p.id)) continue
+          seen.add(p.id)
+          merged.push(p)
+        }
+        return merged
+      })
       setTotal(t)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to load players")
@@ -124,16 +195,17 @@ export default function PlayerDiscoveryHomePage() {
         ok?: boolean
         error?: string
         players?: number
-        transactions?: number
-        batting?: number
-        pitching?: number
       }
       if (!res.ok || body.ok === false) {
         throw new Error(typeof body.error === "string" ? body.error : `Sync failed (${res.status})`)
       }
+      const parsed = body.players ?? 0
+      const playerPhrase =
+        parsed === 1 ? "1 player parsed" : `${parsed.toLocaleString()} players parsed`
+      const at = new Date().toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
       setSyncBanner({
         variant: "success",
-        text: `Database updated from feeds: ${body.players ?? 0} players merged, ${body.transactions ?? 0} transactions, ${body.batting ?? 0} batting / ${body.pitching ?? 0} pitching rows parsed.`,
+        text: `Database updated: ${playerPhrase} at ${at}.`,
       })
       setRefreshTick((t) => t + 1)
     } catch (e) {
@@ -147,6 +219,15 @@ export default function PlayerDiscoveryHomePage() {
   }
 
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId)
+
+  function saveDiscoverySnapshotBeforeProfile() {
+    saveDiscoverySnapshotForPlayerNavigation({
+      searchMode,
+      customFilters,
+      customOnlyWithStats,
+      selectedProfileId,
+    })
+  }
 
   return (
     <main className="px-4 pb-10 sm:px-5">
@@ -317,7 +398,12 @@ export default function PlayerDiscoveryHomePage() {
               <>
                 <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:gap-5">
                   {players.map((p) => (
-                    <PlayerCard key={p.id} player={p} className="!max-w-none min-w-0" />
+                    <PlayerCard
+                      key={p.id}
+                      player={p}
+                      className="!max-w-none min-w-0"
+                      onBeforeNavigate={saveDiscoverySnapshotBeforeProfile}
+                    />
                   ))}
                 </div>
                 <div className="mt-5 flex flex-col items-stretch gap-3 border-t border-neutral-200/80 pt-4 sm:flex-row sm:items-center sm:justify-between">

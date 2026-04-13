@@ -11,6 +11,7 @@
 import { Prisma } from "@prisma/client"
 import type { BattingStats } from "../types/models"
 import { prisma } from "../lib/prisma"
+import { SYNC_UPSERT_CHUNK } from "../lib/syncBatch"
 
 export class BattingStatsRepository {
   /** Newest seasons first (by `season` desc) for “most recent” selection upstream. */
@@ -19,38 +20,63 @@ export class BattingStatsRepository {
       where: { playerId },
       orderBy: { season: "desc" },
     })
-    return rows.map((r) => ({
+    return rows.map((r) => this.mapRow(r))
+  }
+
+  /** One query for many players; each array is newest season first (same as {@link getStatsByPlayer}). */
+  async getStatsByPlayerIds(playerIds: string[]): Promise<Map<string, BattingStats[]>> {
+    if (playerIds.length === 0) return new Map()
+    const rows = await prisma.battingStat.findMany({
+      where: { playerId: { in: playerIds } },
+      orderBy: [{ playerId: "asc" }, { season: "desc" }],
+    })
+    const map = new Map<string, BattingStats[]>()
+    for (const r of rows) {
+      const list = map.get(r.playerId) ?? []
+      list.push(this.mapRow(r))
+      map.set(r.playerId, list)
+    }
+    return map
+  }
+
+  private mapRow(r: {
+    playerId: string
+    season: number
+    avg: InstanceType<typeof Prisma.Decimal>
+    obp: InstanceType<typeof Prisma.Decimal>
+    slg: InstanceType<typeof Prisma.Decimal>
+    ops: InstanceType<typeof Prisma.Decimal>
+  }): BattingStats {
+    return {
       playerId: r.playerId,
       season: r.season,
       avg: Number(r.avg),
       obp: Number(r.obp),
       slg: Number(r.slg),
       ops: Number(r.ops),
-    }))
+    }
   }
 
-  /** Batch upsert of parsed `BattingStats` rows (decimals stored as `Decimal(5,3)`). */
+  /** Batch upsert of parsed `BattingStats` rows (chunked `INSERT … ON CONFLICT`). */
   async upsertStats(stats: BattingStats[]): Promise<void> {
-    for (const s of stats) {
-      await prisma.battingStat.upsert({
-        where: {
-          playerId_season: { playerId: s.playerId, season: s.season },
-        },
-        create: {
-          playerId: s.playerId,
-          season: s.season,
-          avg: new Prisma.Decimal(s.avg.toFixed(3)),
-          obp: new Prisma.Decimal(s.obp.toFixed(3)),
-          slg: new Prisma.Decimal(s.slg.toFixed(3)),
-          ops: new Prisma.Decimal(s.ops.toFixed(3)),
-        },
-        update: {
-          avg: new Prisma.Decimal(s.avg.toFixed(3)),
-          obp: new Prisma.Decimal(s.obp.toFixed(3)),
-          slg: new Prisma.Decimal(s.slg.toFixed(3)),
-          ops: new Prisma.Decimal(s.ops.toFixed(3)),
-        },
-      })
+    if (stats.length === 0) return
+    const byKey = new Map<string, BattingStats>()
+    for (const s of stats) byKey.set(`${s.playerId}\0${s.season}`, s)
+    const uniqueStats = [...byKey.values()]
+    for (let i = 0; i < uniqueStats.length; i += SYNC_UPSERT_CHUNK) {
+      const chunk = uniqueStats.slice(i, i + SYNC_UPSERT_CHUNK)
+      const rows = chunk.map((s) =>
+        Prisma.sql`(${s.playerId}, ${s.season}, ${new Prisma.Decimal(s.avg.toFixed(3))}, ${new Prisma.Decimal(s.obp.toFixed(3))}, ${new Prisma.Decimal(s.slg.toFixed(3))}, ${new Prisma.Decimal(s.ops.toFixed(3))})`,
+      )
+      await prisma.$executeRaw(Prisma.sql`
+        INSERT INTO "BattingStat" ("player_id","season","avg","obp","slg","ops")
+        VALUES ${Prisma.join(rows)}
+        ON CONFLICT ("player_id","season") DO UPDATE SET
+          "avg" = EXCLUDED."avg",
+          "obp" = EXCLUDED."obp",
+          "slg" = EXCLUDED."slg",
+          "ops" = EXCLUDED."ops"
+      `)
     }
   }
 }

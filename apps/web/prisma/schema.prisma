@@ -1,0 +1,110 @@
+// Prisma schema for the Player Discovery Portal API.
+// Tables mirror the SQL spec: players, transactions, batting_stats, pitching_stats, raw_feed_snapshots.
+// Run: npm run db:generate / db:push / migrate from apps/api after changing this file.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Highest level of play (low → high); stored on `Player.experience_level`.
+enum ExperienceLevel {
+  ROOKIE
+  A
+  A_PLUS
+  AA
+  AAA
+  MLB
+}
+
+enum BatHand {
+  L
+  R
+  B
+}
+
+enum ThrowHand {
+  L
+  R
+}
+
+// Core player row keyed by TBC player id (string). Optional age supports discovery filters.
+model Player {
+  id                 String            @id
+  name               String
+  position           String?
+  team               String?
+  status             String            @default("available")
+  age                Int?
+  experienceLevel    ExperienceLevel?  @map("experience_level")
+  bats               BatHand?          @map("bats")
+  throws             ThrowHand?        @map("throws")
+  /// Discovery list filter; set on upsert from isPlayerDiscoveryEligible (see playerEligibility.ts).
+  discoveryEligible  Boolean           @default(true) @map("discovery_eligible")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  transactions Transaction[]
+  battingStats BattingStat[]
+  pitchingStats PitchingStat[]
+
+  @@index([discoveryEligible, name])
+  @@index([experienceLevel])
+}
+
+// Transaction feed lines; uniqueHash prevents duplicate rows from repeated sync runs.
+model Transaction {
+  id          Int      @id @default(autoincrement())
+  playerId    String   @map("player_id")
+  date        DateTime @db.Date
+  type        String
+  description String
+  uniqueHash  String   @unique @map("unique_hash")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId])
+}
+
+// One row per player per season (batting). Unique (player_id, season).
+model BattingStat {
+  id       Int     @id @default(autoincrement())
+  playerId String  @map("player_id")
+  season   Int
+  avg      Decimal @db.Decimal(5, 3)
+  obp      Decimal @db.Decimal(5, 3)
+  slg      Decimal @db.Decimal(5, 3)
+  ops      Decimal @db.Decimal(5, 3)
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, season])
+}
+
+// One row per player per season (pitching). Unique (player_id, season).
+model PitchingStat {
+  id       Int     @id @default(autoincrement())
+  playerId String  @map("player_id")
+  season   Int
+  era      Decimal @db.Decimal(5, 2)
+  whip     Decimal @db.Decimal(5, 3)
+  ip       Decimal @db.Decimal(6, 1)
+  k        Int
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, season])
+}
+
+// Append-only raw feed bodies for debugging and audit (each sync may insert new rows).
+model RawFeedSnapshot {
+  id         Int      @id @default(autoincrement())
+  feedType   String   @map("feed_type")
+  rawContent String   @map("raw_content")
+  fetchedAt  DateTime @default(now()) @map("fetched_at")
+}

@@ -2,7 +2,7 @@
 
 /**
  * @file TransactionHistoryView.tsx
- * @description Client timeline — loads `GET /players/:id/transactions` (DB-backed, chronological).
+ * @description Client timeline — loads `GET /players/:id/transactions` (DB-backed, newest first).
  */
 
 import { useEffect, useState } from "react"
@@ -44,7 +44,11 @@ export function TransactionHistoryView({ playerId }: Props) {
     return <p className="text-sm text-neutral-500">Loading transactions…</p>
   }
   if (!items.length) {
-    return <p className="text-sm text-neutral-500">No transactions on file.</p>
+    return (
+      <p className="text-sm text-neutral-500">
+        No retired, released, or free-agent transactions on file.
+      </p>
+    )
   }
 
   return (

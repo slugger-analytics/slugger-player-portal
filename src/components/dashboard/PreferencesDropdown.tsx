@@ -15,7 +15,7 @@ export const PREFERENCE_OPTIONS = [
   { id: "current-status", label: "Current status", inputType: "text" as const, placeholder: "e.g. injured, active, retired" },
   { id: "years-active", label: "Years active", inputType: "number" as const, placeholder: "e.g. 5" },
   { id: "current-age", label: "Current age", inputType: "number" as const, placeholder: "e.g. 28" },
-  { id: "highest-level", label: "Highest level reached", inputType: "text" as const, placeholder: "e.g. MLB, AAA" },
+  { id: "highest-level", label: "Max experience level", inputType: "text" as const, placeholder: "e.g. MLB, AAA" },
 ] as const;
 
 export type PreferenceId = (typeof PREFERENCE_OPTIONS)[number]["id"];

@@ -3,7 +3,8 @@
  * @description Express router for **Player Discovery** REST endpoints.
  *
  * **Routes (mounted at `/players` in `index.ts`):**
- * - `GET /` — query: `position`, `status`, `team`, `ageMin`, `ageMax`, `hasStats`, `limit`, `offset` → `{ players, total }`
+ * - `GET /` — query: `experienceLevel` (exact enum only), `experience_level`, `highlevel`, `highLevel`,
+ *   `lastTransactionDays` (7 | 14 | 21 | 30 | 45 | 60), …
  * - `GET /:id` — full `PlayerProfile` (stats + embedded transactions)
  * - `GET /:id/transactions` — `Transaction[]` only (used by the web timeline component)
  *
@@ -14,6 +15,14 @@
  * do not import repositories in Next.js code.
  */
 
+import {
+  type BatHand,
+  isBatHandQueryValue,
+  isLastTransactionDaysOption,
+  isThrowHandQueryValue,
+  type ThrowHand,
+  parseExperienceLevelFilterInput,
+} from "@available-player-portal/shared"
 import { Router } from "express"
 import type { PlayerFilters } from "../types/models"
 import { PlayerDataService } from "../services/PlayerDataService"
@@ -79,7 +88,104 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     }
   }
 
-  return { position, status, team, ageMin, ageMax, hasStats, limit, offset }
+  const { value: experienceLevel, invalidRaw: exactInvalid } = parseExactExperienceLevelQuery(query)
+
+  if (exactInvalid) {
+    throw new Error(`Invalid experienceLevel: ${exactInvalid}`)
+  }
+
+  let sortBy: PlayerFilters["sortBy"]
+  const sortByRaw = firstString(query.sortBy)?.trim().toLowerCase()
+  if (sortByRaw != null && sortByRaw !== "") {
+    if (sortByRaw === "name") sortBy = "name"
+    else if (
+      sortByRaw === "experiencelevel" ||
+      sortByRaw === "experience_level" ||
+      sortByRaw === "highlevel" ||
+      sortByRaw === "high_level"
+    ) {
+      sortBy = "experienceLevel"
+    } else if (
+      sortByRaw === "recentprofiletransaction" ||
+      sortByRaw === "recent_profile_transaction" ||
+      sortByRaw === "profiletransaction" ||
+      sortByRaw === "updates"
+    ) {
+      sortBy = "recentProfileTransaction"
+    } else {
+      throw new Error("Invalid sortBy")
+    }
+  }
+
+  let sortDir: "asc" | "desc" | undefined
+  const sortDirRaw = firstString(query.sortDir)?.trim().toLowerCase()
+  if (sortDirRaw != null && sortDirRaw !== "") {
+    if (sortDirRaw === "asc" || sortDirRaw === "desc") {
+      sortDir = sortDirRaw
+    } else {
+      throw new Error("Invalid sortDir")
+    }
+  }
+
+  let lastTransactionDays: number | undefined
+  const ltdRaw =
+    firstString(query.lastTransactionDays) ??
+    (typeof query.lastTransactionDays === "number" ? String(query.lastTransactionDays) : undefined)
+  if (ltdRaw != null && ltdRaw !== "") {
+    const n = Number(ltdRaw)
+    if (!Number.isInteger(n) || !isLastTransactionDaysOption(n)) {
+      throw new Error("Invalid lastTransactionDays")
+    }
+    lastTransactionDays = n
+  }
+
+  let bats: PlayerFilters["bats"]
+  const batsRaw = firstString(query.bats)
+  if (batsRaw != null && batsRaw !== "") {
+    if (!isBatHandQueryValue(batsRaw)) throw new Error("Invalid bats")
+    bats = batsRaw.trim().toUpperCase() as BatHand
+  }
+
+  let throws: PlayerFilters["throws"]
+  const throwsRaw = firstString(query.throws)
+  if (throwsRaw != null && throwsRaw !== "") {
+    if (!isThrowHandQueryValue(throwsRaw)) throw new Error("Invalid throws")
+    throws = throwsRaw.trim().toUpperCase() as ThrowHand
+  }
+
+  return {
+    position,
+    status,
+    team,
+    ageMin,
+    ageMax,
+    experienceLevel,
+    hasStats,
+    limit,
+    offset,
+    sortBy,
+    sortDir,
+    lastTransactionDays,
+    bats,
+    throws,
+  }
+}
+
+/** Exact level: UI sends `experienceLevel`; TBC-style URLs often use `highlevel` / `highLevel`. */
+function parseExactExperienceLevelQuery(query: Record<string, unknown>): {
+  value: string | undefined
+  invalidRaw: string | undefined
+} {
+  // Same filter; multiple keys for HTTP clients (camelCase, snake_case, TBC-style).
+  const keys = ["experienceLevel", "experience_level", "highlevel", "highLevel"] as const
+  for (const key of keys) {
+    const raw = firstString(query[key])
+    if (raw == null || raw.trim() === "") continue
+    const parsed = parseExperienceLevelFilterInput(raw)
+    if (parsed) return { value: parsed, invalidRaw: undefined }
+    return { value: undefined, invalidRaw: raw }
+  }
+  return { value: undefined, invalidRaw: undefined }
 }
 
 /** Factory so tests can mount the router without starting the full app. */

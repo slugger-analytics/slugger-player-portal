@@ -5,13 +5,16 @@
  * **Purpose:** Store one row per logical transaction line from TBC. Duplicate syncs
  * must not insert duplicates: `uniqueHash` is a SHA-256 of `(playerId|date|type|description)`.
  *
- * **Usage:** `getTransactionsByPlayer` returns rows oldest→newest for timelines;
+ * **Usage:** `getTransactionsByPlayer` returns rows newest→oldest for profile/history UI;
  * `upsertTransactions` is called from `syncPipeline.ts` with parsed feed rows.
  */
 
+import { isTransactionShownOnPlayerProfile } from "@available-player-portal/shared"
 import { createHash } from "crypto"
+import { Prisma } from "@prisma/client"
 import type { Transaction } from "../types/models"
 import { prisma } from "../lib/prisma"
+import { SYNC_UPSERT_CHUNK } from "../lib/syncBatch"
 
 /** Stable natural key for Prisma `upsert` when the feed does not supply a surrogate id. */
 function uniqueHash(t: Transaction): string {
@@ -21,41 +24,67 @@ function uniqueHash(t: Transaction): string {
 }
 
 export class TransactionRepository {
-  /** Chronological order (ascending by `date`) for UI transaction history. */
+  /**
+   * Max transaction `date` per player among rows that appear on the player profile
+   * ({@link isTransactionShownOnPlayerProfile}) — same filter as {@link getTransactionsByPlayer}.
+   */
+  async getMaxTransactionDatesByPlayerIds(playerIds: string[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>()
+    if (playerIds.length === 0) return out
+    const rows = await prisma.transaction.findMany({
+      where: { playerId: { in: playerIds } },
+      select: { playerId: true, date: true, type: true },
+    })
+    for (const r of rows) {
+      if (!isTransactionShownOnPlayerProfile(r.type)) continue
+      const d = r.date.toISOString().slice(0, 10)
+      const prev = out.get(r.playerId)
+      if (prev === undefined || d > prev) out.set(r.playerId, d)
+    }
+    return out
+  }
+
+  /**
+   * Reverse chronological (newest first); tie-break by id for same calendar date.
+   * Only retired, released, and free-agent types (see shared `isTransactionShownOnPlayerProfile`).
+   */
   async getTransactionsByPlayer(playerId: string): Promise<Transaction[]> {
     const rows = await prisma.transaction.findMany({
       where: { playerId },
-      orderBy: { date: "asc" },
+      orderBy: [{ date: "desc" }, { id: "desc" }],
     })
-    return rows.map((r) => ({
-      playerId: r.playerId,
-      date: r.date.toISOString().slice(0, 10),
-      type: r.type,
-      description: r.description,
-    }))
+    return rows
+      .filter((r) => isTransactionShownOnPlayerProfile(r.type))
+      .map((r) => ({
+        playerId: r.playerId,
+        date: r.date.toISOString().slice(0, 10),
+        type: r.type,
+        description: r.description,
+      }))
   }
 
-  /** Creates or updates by `uniqueHash`; safe to run on a cron without duplicating rows. */
+  /** Creates or updates by `uniqueHash`; bulk upsert per chunk for sync performance. */
   async upsertTransactions(txs: Transaction[]): Promise<void> {
-    for (const t of txs) {
-      const hash = uniqueHash(t)
-      const d = new Date(t.date + "T12:00:00.000Z")
-      await prisma.transaction.upsert({
-        where: { uniqueHash: hash },
-        create: {
-          playerId: t.playerId,
-          date: d,
-          type: t.type,
-          description: t.description,
-          uniqueHash: hash,
-        },
-        update: {
-          playerId: t.playerId,
-          date: d,
-          type: t.type,
-          description: t.description,
-        },
+    if (txs.length === 0) return
+    const byHash = new Map<string, Transaction>()
+    for (const t of txs) byHash.set(uniqueHash(t), t)
+    const uniqueTxs = [...byHash.values()]
+    for (let i = 0; i < uniqueTxs.length; i += SYNC_UPSERT_CHUNK) {
+      const chunk = uniqueTxs.slice(i, i + SYNC_UPSERT_CHUNK)
+      const rows = chunk.map((t) => {
+        const hash = uniqueHash(t)
+        const d = new Date(t.date + "T12:00:00.000Z")
+        return Prisma.sql`(${t.playerId}, ${d}::date, ${t.type}, ${t.description}, ${hash})`
       })
+      await prisma.$executeRaw(Prisma.sql`
+        INSERT INTO "Transaction" ("player_id","date","type","description","unique_hash")
+        VALUES ${Prisma.join(rows)}
+        ON CONFLICT ("unique_hash") DO UPDATE SET
+          "player_id" = EXCLUDED."player_id",
+          "date" = EXCLUDED."date",
+          "type" = EXCLUDED."type",
+          "description" = EXCLUDED."description"
+      `)
     }
   }
 }
