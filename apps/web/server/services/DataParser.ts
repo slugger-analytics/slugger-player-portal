@@ -19,6 +19,10 @@
 import { createHash } from "crypto"
 import { extractHighLevelRawCell, parseExperienceLevelFromText } from "@available-player-portal/shared"
 
+import {
+  parseBatHandFromPlayerRow,
+  parseThrowHandFromPlayerRow,
+} from "@available-player-portal/shared"
 import type { BattingStats, PitchingStats, Player, Transaction } from "../types/models"
 
 /** Split TBC feed into logical rows (CSV lines separated by `<br>`). */
@@ -290,6 +294,8 @@ export class DataParser {
     if (!id) {
       id = `anon-${createHash("sha256").update(`${name}|${team}`).digest("hex").slice(0, 16)}`
     }
+    const bats = parseBatHandFromPlayerRow(raw)
+    const throws = parseThrowHandFromPlayerRow(raw)
     return {
       id,
       name,
@@ -298,6 +304,8 @@ export class DataParser {
       status,
       age: age ?? undefined,
       experienceLevel,
+      bats,
+      throws,
     }
   }
 }

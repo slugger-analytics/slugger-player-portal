@@ -14,7 +14,14 @@
  * do not import repositories in Next.js code.
  */
 
-import { isLastTransactionDaysOption, parseExperienceLevelFilterInput } from "@available-player-portal/shared"
+import {
+  type BatHand,
+  isBatHandQueryValue,
+  isLastTransactionDaysOption,
+  isThrowHandQueryValue,
+  type ThrowHand,
+  parseExperienceLevelFilterInput,
+} from "@available-player-portal/shared"
 import { Router } from "express"
 import type { PlayerFilters } from "../types/models"
 import { PlayerDataService } from "../services/PlayerDataService"
@@ -124,6 +131,20 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     lastTransactionDays = n
   }
 
+  let bats: PlayerFilters["bats"]
+  const batsRaw = firstString(query.bats)
+  if (batsRaw != null && batsRaw !== "") {
+    if (!isBatHandQueryValue(batsRaw)) throw new Error("Invalid bats")
+    bats = batsRaw.trim().toUpperCase() as BatHand
+  }
+
+  let throws: PlayerFilters["throws"]
+  const throwsRaw = firstString(query.throws)
+  if (throwsRaw != null && throwsRaw !== "") {
+    if (!isThrowHandQueryValue(throwsRaw)) throw new Error("Invalid throws")
+    throws = throwsRaw.trim().toUpperCase() as ThrowHand
+  }
+
   return {
     position,
     status,
@@ -137,6 +158,8 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     sortBy,
     sortDir,
     lastTransactionDays,
+    bats,
+    throws,
   }
 }
 

@@ -11,7 +11,7 @@
  */
 
 import { isExperienceLevelCode, isLastTransactionDaysOption } from "@available-player-portal/shared"
-import type { ExperienceLevel } from "@prisma/client"
+import type { BatHand as PrismaBatHand, ExperienceLevel, ThrowHand as PrismaThrowHand } from "@prisma/client"
 import { Prisma } from "@prisma/client"
 import type { Player, PlayerFilters } from "../types/models"
 import { prisma } from "../lib/prisma"
@@ -77,6 +77,12 @@ export class PlayerRepository {
       clauses.push({
         transactions: { some: { date: { gte: cutoff } } },
       })
+    }
+    if (filters.bats != null) {
+      clauses.push({ bats: filters.bats as PrismaBatHand })
+    }
+    if (filters.throws != null) {
+      clauses.push({ throws: filters.throws as PrismaThrowHand })
     }
     return clauses
   }
@@ -154,6 +160,8 @@ export class PlayerRepository {
     status: string
     age: number | null
     experienceLevel: ExperienceLevel | null
+    bats: PrismaBatHand | null
+    throws: PrismaThrowHand | null
   }): Player {
     return {
       id: r.id,
@@ -163,6 +171,8 @@ export class PlayerRepository {
       status: r.status,
       age: r.age ?? undefined,
       experienceLevel: r.experienceLevel ?? undefined,
+      bats: r.bats ?? undefined,
+      throws: r.throws ?? undefined,
     }
   }
 
@@ -208,6 +218,8 @@ export class PlayerRepository {
       status: r.status,
       age: r.age ?? undefined,
       experienceLevel: r.experienceLevel ?? undefined,
+      bats: r.bats ?? undefined,
+      throws: r.throws ?? undefined,
     }
   }
 
@@ -225,10 +237,14 @@ export class PlayerRepository {
           p.experienceLevel != null && p.experienceLevel !== ""
             ? Prisma.sql`CAST(${p.experienceLevel} AS "ExperienceLevel")`
             : Prisma.sql`NULL`
-        return Prisma.sql`(${p.id}, ${p.name}, ${p.position || null}, ${p.team || null}, ${p.status}, ${p.age ?? null}, ${elSql}, ${discoveryEligible}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+        const batsSql =
+          p.bats != null ? Prisma.sql`CAST(${p.bats} AS "BatHand")` : Prisma.sql`NULL`
+        const throwsSql =
+          p.throws != null ? Prisma.sql`CAST(${p.throws} AS "ThrowHand")` : Prisma.sql`NULL`
+        return Prisma.sql`(${p.id}, ${p.name}, ${p.position || null}, ${p.team || null}, ${p.status}, ${p.age ?? null}, ${elSql}, ${batsSql}, ${throwsSql}, ${discoveryEligible}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
       })
       await prisma.$executeRaw(Prisma.sql`
-        INSERT INTO "Player" ("id","name","position","team","status","age","experience_level","discovery_eligible","created_at","updated_at")
+        INSERT INTO "Player" ("id","name","position","team","status","age","experience_level","bats","throws","discovery_eligible","created_at","updated_at")
         VALUES ${Prisma.join(rows)}
         ON CONFLICT ("id") DO UPDATE SET
           "name" = EXCLUDED."name",
@@ -237,6 +253,8 @@ export class PlayerRepository {
           "status" = EXCLUDED."status",
           "age" = EXCLUDED."age",
           "experience_level" = EXCLUDED."experience_level",
+          "bats" = EXCLUDED."bats",
+          "throws" = EXCLUDED."throws",
           "discovery_eligible" = EXCLUDED."discovery_eligible",
           "updated_at" = CURRENT_TIMESTAMP
       `)

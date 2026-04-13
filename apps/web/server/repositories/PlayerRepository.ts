@@ -11,7 +11,7 @@
  */
 
 import { isExperienceLevelCode, isLastTransactionDaysOption } from "@available-player-portal/shared"
-import type { ExperienceLevel } from "@prisma/client"
+import type { BatHand as PrismaBatHand, ExperienceLevel, ThrowHand as PrismaThrowHand } from "@prisma/client"
 import { Prisma } from "@prisma/client"
 import type { Player, PlayerFilters } from "../types/models"
 import { prisma } from "../lib/prisma"
@@ -77,6 +77,12 @@ export class PlayerRepository {
       clauses.push({
         transactions: { some: { date: { gte: cutoff } } },
       })
+    }
+    if (filters.bats != null) {
+      clauses.push({ bats: filters.bats as PrismaBatHand })
+    }
+    if (filters.throws != null) {
+      clauses.push({ throws: filters.throws as PrismaThrowHand })
     }
     return clauses
   }
@@ -155,6 +161,8 @@ export class PlayerRepository {
     status: string
     age: number | null
     experienceLevel: ExperienceLevel | null
+    bats: PrismaBatHand | null
+    throws: PrismaThrowHand | null
   }): Player {
     return {
       id: r.id,
@@ -164,6 +172,8 @@ export class PlayerRepository {
       status: r.status,
       age: r.age ?? undefined,
       experienceLevel: r.experienceLevel ?? undefined,
+      bats: r.bats ?? undefined,
+      throws: r.throws ?? undefined,
     }
   }
 
@@ -245,6 +255,8 @@ export class PlayerRepository {
       status: r.status,
       age: r.age ?? undefined,
       experienceLevel: r.experienceLevel ?? undefined,
+      bats: r.bats ?? undefined,
+      throws: r.throws ?? undefined,
     }
   }
 
@@ -255,6 +267,8 @@ export class PlayerRepository {
         p.experienceLevel != null && p.experienceLevel !== ""
           ? (p.experienceLevel as ExperienceLevel)
           : null
+      const bats = p.bats != null ? (p.bats as PrismaBatHand) : null
+      const throws = p.throws != null ? (p.throws as PrismaThrowHand) : null
       await prisma.player.upsert({
         where: { id: p.id },
         create: {
@@ -265,6 +279,8 @@ export class PlayerRepository {
           status: p.status,
           age: p.age ?? null,
           experienceLevel,
+          bats,
+          throws,
           discoveryEligible: isPlayerDiscoveryEligible(p),
         },
         update: {
@@ -274,6 +290,8 @@ export class PlayerRepository {
           status: p.status,
           age: p.age ?? null,
           experienceLevel,
+          bats,
+          throws,
           discoveryEligible: isPlayerDiscoveryEligible(p),
         },
       })

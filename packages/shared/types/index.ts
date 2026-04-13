@@ -2,3 +2,4 @@
 export * from "./models"
 export * from "./experienceLevel"
 export * from "./transactionProfileDisplay"
+export * from "./handedness"

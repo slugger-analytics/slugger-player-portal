@@ -1,6 +1,11 @@
 "use client"
 
-import { EXPERIENCE_LEVEL_OPTIONS, LAST_TRANSACTION_DAYS_OPTIONS } from "@available-player-portal/shared"
+import {
+  EXPERIENCE_LEVEL_OPTIONS,
+  LAST_TRANSACTION_DAYS_OPTIONS,
+  type BatHand,
+  type ThrowHand,
+} from "@available-player-portal/shared"
 import { useState } from "react"
 import {
   ADD_PREFERENCE_OPTIONS,
@@ -37,6 +42,12 @@ export function FilterModal({
   const [lastTxDays, setLastTxDays] = useState(
     initial.kind === "lastTransactionDays" ? (initial.rawValue ?? "") : "",
   )
+  const [batHand, setBatHand] = useState(
+    initial.kind === "handedness" ? (initial.bats ?? "any") : "any",
+  )
+  const [throwHand, setThrowHand] = useState(
+    initial.kind === "handedness" ? (initial.throws ?? "any") : "any",
+  )
 
   function buildFilter(): UiFilter {
     const id = state.mode === "edit" ? state.filter.id : newId()
@@ -70,6 +81,25 @@ export function FilterModal({
       if (!v) return { id, kind, label: "Last X days: Select", rawValue: "" }
       return { id, kind, label: `Last ${v} days`, rawValue: v }
     }
+    if (kind === "handedness") {
+      const b = batHand.trim()
+      const th = throwHand.trim()
+      const batsFilter = b !== "any" && b !== "" ? (b as BatHand) : undefined
+      const throwsFilter = th !== "any" && th !== "" ? (th as ThrowHand) : undefined
+      if (batsFilter == null && throwsFilter == null) {
+        return { id, kind: "handedness", label: "Handedness: Any" }
+      }
+      const parts: string[] = []
+      if (batsFilter != null) parts.push(`bats ${batsFilter}`)
+      if (throwsFilter != null) parts.push(`throws ${throwsFilter}`)
+      return {
+        id,
+        kind: "handedness",
+        label: `Handedness: ${parts.join(" · ")}`,
+        ...(batsFilter != null ? { bats: batsFilter } : {}),
+        ...(throwsFilter != null ? { throws: throwsFilter } : {}),
+      }
+    }
     const trimmed = ageValue.trim()
     const n = Number(trimmed)
     if (!trimmed || !Number.isFinite(n)) {
@@ -91,6 +121,11 @@ export function FilterModal({
     if (kind === "status") return status.trim() !== ""
     if (kind === "experienceLevel") return expMax.trim() !== ""
     if (kind === "lastTransactionDays") return lastTxDays.trim() !== ""
+    if (kind === "handedness") {
+      const b = batHand.trim()
+      const th = throwHand.trim()
+      return (b !== "any" && b !== "") || (th !== "any" && th !== "")
+    }
     if (kind === "age") {
       const t = ageValue.trim()
       if (t === "") return false
@@ -228,6 +263,36 @@ export function FilterModal({
             </label>
           ) : null}
 
+          {kind === "handedness" ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                Batting
+                <select
+                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                  value={batHand}
+                  onChange={(e) => setBatHand(e.target.value)}
+                >
+                  <option value="any">Any</option>
+                  <option value="L">L</option>
+                  <option value="R">R</option>
+                  <option value="B">B</option>
+                </select>
+              </label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                Throwing
+                <select
+                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                  value={throwHand}
+                  onChange={(e) => setThrowHand(e.target.value)}
+                >
+                  <option value="any">Any</option>
+                  <option value="L">L</option>
+                  <option value="R">R</option>
+                </select>
+              </label>
+            </div>
+          ) : null}
+
           {kind === "age" ? (
             <div className="grid grid-cols-2 gap-3">
               <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
@@ -263,7 +328,13 @@ export function FilterModal({
             type="button"
             className="portal-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!canSave}
-            title={canSave ? undefined : "Choose a value (not Select) before saving"}
+            title={
+              canSave
+                ? undefined
+                : kind === "handedness"
+                  ? "Select at least one of batting or throwing; use Any to ignore that side"
+                  : "Choose a value (not Select) before saving"
+            }
             onClick={() => {
               if (!canSave) return
               onSave({ filter: buildFilter() })

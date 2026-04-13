@@ -5,7 +5,11 @@
 
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { experienceLevelDisplayLabel } from "@available-player-portal/shared"
+import {
+  batHandDisplayLabel,
+  experienceLevelDisplayLabel,
+  throwHandDisplayLabel,
+} from "@available-player-portal/shared"
 import type { BattingStats, PitchingStats } from "@available-player-portal/shared"
 import { TransactionHistoryView } from "@/components/discovery/TransactionHistoryView"
 import { PlayerDetailFavoriteBar } from "@/components/favorites/PlayerDetailFavoriteBar"
@@ -59,6 +63,14 @@ export default async function PlayerDetailPage({ params }: Props) {
           <span>
             <span className="text-neutral-500">Max experience level:</span>{" "}
             {experienceLevelDisplayLabel(p.experienceLevel)}
+          </span>
+          <span>
+            <span className="text-neutral-500">Bats:</span>{" "}
+            {p.bats != null ? batHandDisplayLabel(p.bats) : "—"}
+          </span>
+          <span>
+            <span className="text-neutral-500">Throws:</span>{" "}
+            {p.throws != null ? throwHandDisplayLabel(p.throws) : "—"}
           </span>
         </div>
       </header>

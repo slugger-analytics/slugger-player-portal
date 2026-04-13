@@ -1,3 +1,5 @@
+import type { BatHand, ThrowHand } from "./handedness"
+
 /**
  * @file packages/shared/types/models.ts
  * @description **Canonical domain types** shared by the Express API and Next.js web app.
@@ -20,6 +22,10 @@ export interface Player {
   age?: number | null
   /** Highest level reached; Prisma enum string e.g. `AAA`, `MLB`. */
   experienceLevel?: string | null
+  /** From TBC feed: L / R / B (both). */
+  bats?: BatHand | null
+  /** From TBC feed: L / R. */
+  throws?: ThrowHand | null
 }
 
 export interface Transaction {
@@ -76,6 +82,10 @@ export interface PlayerFilters {
    * Allowed values: {@link LAST_TRANSACTION_DAYS_OPTIONS}.
    */
   lastTransactionDays?: number
+  /** Exact match on {@link Player.bats} (L, R, B). Query: `bats`. */
+  bats?: BatHand
+  /** Exact match on {@link Player.throws} (L, R). Query: `throws`. */
+  throws?: ThrowHand
 }
 
 /** Allowed “Last X days” preference values (transaction recency window). */

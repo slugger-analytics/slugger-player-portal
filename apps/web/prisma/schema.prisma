@@ -21,6 +21,17 @@ enum ExperienceLevel {
   MLB
 }
 
+enum BatHand {
+  L
+  R
+  B
+}
+
+enum ThrowHand {
+  L
+  R
+}
+
 // Core player row keyed by TBC player id (string). Optional age supports discovery filters.
 model Player {
   id                 String            @id
@@ -30,6 +41,8 @@ model Player {
   status             String            @default("available")
   age                Int?
   experienceLevel    ExperienceLevel?  @map("experience_level")
+  bats               BatHand?          @map("bats")
+  throws             ThrowHand?        @map("throws")
   /// Discovery list filter; set on upsert from isPlayerDiscoveryEligible (see playerEligibility.ts).
   discoveryEligible  Boolean           @default(true) @map("discovery_eligible")
   createdAt          DateTime          @default(now()) @map("created_at")

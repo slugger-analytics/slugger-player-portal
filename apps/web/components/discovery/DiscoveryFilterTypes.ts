@@ -2,6 +2,8 @@
  * Discovery filter row model + query helper shared by home (custom) and Preferences (profiles).
  */
 
+import type { BatHand, ThrowHand } from "@available-player-portal/shared"
+
 export type FilterKind =
   | "position"
   | "age"
@@ -9,6 +11,7 @@ export type FilterKind =
   | "status"
   | "experienceLevel"
   | "lastTransactionDays"
+  | "handedness"
 
 export type UiFilter = {
   id: string
@@ -17,6 +20,12 @@ export type UiFilter = {
   rawValue?: string
   ageMode?: "lt" | "gt"
   ageValue?: number
+  /**
+   * When {@link FilterKind} is `handedness`: set one or both. Omitted side means “any”
+   * (no filter on that column).
+   */
+  bats?: BatHand
+  throws?: ThrowHand
 }
 
 export function newId(): string {
@@ -48,6 +57,12 @@ export function defaultUiFilterForPreset(preset: FilterKind): UiFilter {
         label: "Last X days: Select",
         rawValue: "",
       }
+    case "handedness":
+      return {
+        id,
+        kind: "handedness",
+        label: "Handedness: Any",
+      }
   }
 }
 
@@ -58,6 +73,7 @@ export const ADD_PREFERENCE_OPTIONS: { kind: FilterKind; label: string }[] = [
   { kind: "status", label: "Status" },
   { kind: "experienceLevel", label: "Max experience level" },
   { kind: "lastTransactionDays", label: "Last X days" },
+  { kind: "handedness", label: "Handedness" },
 ]
 
 export const POSITION_FILTER_OPTIONS = [
@@ -92,6 +108,10 @@ export function filtersToQuery(filters: UiFilter[]): Record<string, string | num
     if (f.kind === "lastTransactionDays" && f.rawValue) {
       const n = Number(f.rawValue)
       if (Number.isInteger(n)) q.lastTransactionDays = n
+    }
+    if (f.kind === "handedness") {
+      if (f.bats != null) q.bats = f.bats
+      if (f.throws != null) q.throws = f.throws
     }
   }
   return q
