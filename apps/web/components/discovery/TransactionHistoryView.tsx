@@ -44,7 +44,11 @@ export function TransactionHistoryView({ playerId }: Props) {
     return <p className="text-sm text-neutral-500">Loading transactions…</p>
   }
   if (!items.length) {
-    return <p className="text-sm text-neutral-500">No transactions on file.</p>
+    return (
+      <p className="text-sm text-neutral-500">
+        No retired, released, or free-agent transactions on file.
+      </p>
+    )
   }
 
   return (

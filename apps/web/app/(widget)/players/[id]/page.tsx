@@ -85,7 +85,8 @@ export default async function PlayerDetailPage({ params }: Props) {
       </section>
 
       <section>
-        <h2 className="mb-4 text-lg font-bold text-black">Transaction history</h2>
+        <h2 className="mb-1 text-lg font-bold text-black">Recent transactions</h2>
+        <p className="mb-4 text-xs text-neutral-500">Retired, released, and free agent only.</p>
         <TransactionHistoryView playerId={p.id} />
       </section>
     </main>

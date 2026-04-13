@@ -9,6 +9,7 @@
  * `upsertTransactions` is called from `syncPipeline.ts` with parsed feed rows.
  */
 
+import { isTransactionShownOnPlayerProfile } from "@available-player-portal/shared"
 import { createHash } from "crypto"
 import { Prisma } from "@prisma/client"
 import type { Transaction } from "../types/models"
@@ -23,18 +24,23 @@ function uniqueHash(t: Transaction): string {
 }
 
 export class TransactionRepository {
-  /** Reverse chronological (newest first); tie-break by id for same calendar date. */
+  /**
+   * Reverse chronological (newest first); tie-break by id for same calendar date.
+   * Only retired, released, and free-agent types (see shared `isTransactionShownOnPlayerProfile`).
+   */
   async getTransactionsByPlayer(playerId: string): Promise<Transaction[]> {
     const rows = await prisma.transaction.findMany({
       where: { playerId },
       orderBy: [{ date: "desc" }, { id: "desc" }],
     })
-    return rows.map((r) => ({
-      playerId: r.playerId,
-      date: r.date.toISOString().slice(0, 10),
-      type: r.type,
-      description: r.description,
-    }))
+    return rows
+      .filter((r) => isTransactionShownOnPlayerProfile(r.type))
+      .map((r) => ({
+        playerId: r.playerId,
+        date: r.date.toISOString().slice(0, 10),
+        type: r.type,
+        description: r.description,
+      }))
   }
 
   /** Creates or updates by `uniqueHash`; bulk upsert per chunk for sync performance. */
