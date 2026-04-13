@@ -46,23 +46,64 @@ export class PlayerDataService {
 
   /** Applies DB filters, then enriches each row with a minimal stat line for the UI. */
   async listPlayerSummaries(filters: PlayerFilters): Promise<PlayerSummary[]> {
-    const list = await this.players.getPlayers(filters)
-    const out: PlayerSummary[] = []
-    for (const p of list) {
-      out.push(await this.buildPlayerSummaryInternal(p))
-    }
-    return out
+    const { players } = await this.listPlayerSummariesWithTotal(filters)
+    return players
   }
 
   /** List + total row count for `GET /players` pagination (`limit` / `offset`). */
   async listPlayerSummariesWithTotal(filters: PlayerFilters): Promise<PlayerSummariesResponse> {
+    if (filters.sortBy === "recentProfileTransaction" && filters.lastTransactionDays == null) {
+      return this.listPlayerSummariesWithTotalByProfileTransactionRecency(filters)
+    }
     const [total, list] = await Promise.all([
       this.players.countPlayers(filters),
       this.players.getPlayers(filters),
     ])
+    if (list.length === 0) return { players: [], total }
+    const ids = list.map((p) => p.id)
+    const txMaxById = await this.transactions.getMaxTransactionDatesByPlayerIds(ids)
     const players: PlayerSummary[] = []
     for (const p of list) {
-      players.push(await this.buildPlayerSummaryInternal(p))
+      const base = await this.buildPlayerSummaryStatsOnly(p)
+      players.push({
+        ...base,
+        mostRecentTransactionDate: txMaxById.get(p.id) ?? null,
+      })
+    }
+    return { players, total }
+  }
+
+  private async listPlayerSummariesWithTotalByProfileTransactionRecency(
+    filters: PlayerFilters,
+  ): Promise<PlayerSummariesResponse> {
+    const candidates = await this.players.listPlayerIdAndNameMatching(filters)
+    const total = candidates.length
+    if (total === 0) return { players: [], total: 0 }
+    const ids = candidates.map((c) => c.id)
+    const txMap = await this.transactions.getMaxTransactionDatesByPlayerIds(ids)
+    const sorted = [...candidates].sort((a, b) => {
+      const da = txMap.get(a.id)
+      const db = txMap.get(b.id)
+      const aHas = da != null
+      const bHas = db != null
+      if (aHas && bHas && da !== db) return db!.localeCompare(da!)
+      if (aHas && !bHas) return -1
+      if (!aHas && bHas) return 1
+      return a.name.localeCompare(b.name)
+    })
+    const offset = filters.offset ?? 0
+    const limit = filters.limit != null ? filters.limit : sorted.length
+    const slice = sorted.slice(offset, offset + limit)
+    const list = await this.players.getPlayersByIdsInOrder(slice.map((s) => s.id))
+    if (list.length === 0) return { players: [], total }
+    const txMaxById = await this.transactions.getMaxTransactionDatesByPlayerIds(list.map((p) => p.id))
+    const players: PlayerSummary[] = []
+    for (const p of list) {
+      const base = await this.buildPlayerSummaryStatsOnly(p)
+      players.push({
+        ...base,
+        mostRecentTransactionDate: txMaxById.get(p.id) ?? null,
+      })
     }
     return { players, total }
   }
@@ -74,8 +115,10 @@ export class PlayerDataService {
     return this.buildPlayerSummaryInternal(p)
   }
 
-  /** Shared implementation for list and single summary (avoids double-fetching by id). */
-  private async buildPlayerSummaryInternal(p: Player): Promise<PlayerSummary> {
+  /** Stat line only; list callers merge {@link PlayerSummary.mostRecentTransactionDate} from a batch query. */
+  private async buildPlayerSummaryStatsOnly(
+    p: Player,
+  ): Promise<Omit<PlayerSummary, "mostRecentTransactionDate">> {
     const battingStats = await this.batting.getStatsByPlayer(p.id)
     const pitchingStats = await this.pitching.getStatsByPlayer(p.id)
     const arr = pickStatArrayForLine(battingStats, pitchingStats, p.position)
@@ -93,6 +136,15 @@ export class PlayerDataService {
     }
   }
 
+  /** Shared implementation for list and single summary (avoids double-fetching by id). */
+  private async buildPlayerSummaryInternal(p: Player): Promise<PlayerSummary> {
+    const [base, txMaxById] = await Promise.all([
+      this.buildPlayerSummaryStatsOnly(p),
+      this.transactions.getMaxTransactionDatesByPlayerIds([p.id]),
+    ])
+    return { ...base, mostRecentTransactionDate: txMaxById.get(p.id) ?? null }
+  }
+
   /**
    * Full detail: core `Player`, batting/pitching “most recent” + “previous” seasons,
    * and transaction history (same rows as `GET /players/:id/transactions`, embedded).
@@ -100,9 +152,12 @@ export class PlayerDataService {
   async buildPlayerProfile(playerId: string): Promise<PlayerProfile | null> {
     const player = await this.players.getPlayerById(playerId)
     if (!player) return null
-    const battingStats = await this.batting.getStatsByPlayer(playerId)
-    const pitchingStats = await this.pitching.getStatsByPlayer(playerId)
-    const txs = await this.transactions.getTransactionsByPlayer(playerId)
+    const [battingStats, pitchingStats, txs, txMaxById] = await Promise.all([
+      this.batting.getStatsByPlayer(playerId),
+      this.pitching.getStatsByPlayer(playerId),
+      this.transactions.getTransactionsByPlayer(playerId),
+      this.transactions.getMaxTransactionDatesByPlayerIds([playerId]),
+    ])
     return {
       player,
       mostRecentBatting: this.statLine.selectMostRecentSeason(battingStats) as BattingStats | null,
@@ -110,6 +165,7 @@ export class PlayerDataService {
       mostRecentPitching: this.statLine.selectMostRecentSeason(pitchingStats) as PitchingStats | null,
       previousPitching: this.statLine.selectPreviousSeason(pitchingStats) as PitchingStats | null,
       transactions: txs,
+      mostRecentTransactionDate: txMaxById.get(playerId) ?? null,
     }
   }
 

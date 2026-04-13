@@ -70,8 +70,12 @@ export interface PlayerFilters {
   limit?: number
   /** Skip this many rows before returning `limit` results (default 0). Ignored if `limit` is unset. */
   offset?: number
-  /** Discovery list ordering. Default `name`. */
-  sortBy?: "name" | "experienceLevel"
+  /**
+   * Discovery list ordering. Default `name`.
+   * `recentProfileTransaction` = newest profile-visible transaction date first (then name); requires
+   * API support that joins transaction data. Omit `lastTransactionDays` when using this sort.
+   */
+  sortBy?: "name" | "experienceLevel" | "recentProfileTransaction"
   /**
    * `asc` | `desc`. When omitted: `asc` for name, `desc` for experience level (MLB first).
    */
@@ -109,6 +113,8 @@ export interface PlayerSummary {
   minimalStatLine: string
   mostRecentTeam: string
   imageUrl?: string | null
+  /** Latest calendar date among profile-visible transactions (retired / released / FA); null if none. */
+  mostRecentTransactionDate?: string | null
 }
 
 /** API response for `GET /players` (paginated list + total matching filters). */
@@ -126,4 +132,6 @@ export interface PlayerProfile {
   mostRecentPitching: PitchingStats | null
   previousPitching: PitchingStats | null
   transactions: Transaction[]
+  /** Same semantics as {@link PlayerSummary.mostRecentTransactionDate} (profile-visible types only). */
+  mostRecentTransactionDate?: string | null
 }

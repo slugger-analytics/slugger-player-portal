@@ -182,6 +182,23 @@ export class PlayerRepository {
     return prisma.player.count({ where })
   }
 
+  /** Id + name for every row matching filters (no pagination). Used to sort by profile-visible tx in {@link PlayerDataService}. */
+  async listPlayerIdAndNameMatching(filters: PlayerFilters): Promise<{ id: string; name: string }[]> {
+    const where = this.withDiscoveryEligible(filters)
+    return prisma.player.findMany({
+      where,
+      select: { id: true, name: true },
+    })
+  }
+
+  /** Hydrate full {@link Player} rows in the given id order. */
+  async getPlayersByIdsInOrder(ids: string[]): Promise<Player[]> {
+    if (ids.length === 0) return []
+    const rows = await prisma.player.findMany({ where: { id: { in: ids } } })
+    const byId = new Map(rows.map((r) => [r.id, this.mapRow(r)]))
+    return ids.map((id) => byId.get(id)).filter((r): r is Player => r != null)
+  }
+
   /**
    * Discovery list: filters + `discovery_eligible` (same rules as {@link isPlayerDiscoveryEligible}).
    * Paginated requests use DB `skip`/`take` on `name` order.
@@ -189,6 +206,11 @@ export class PlayerRepository {
   async getPlayers(filters: PlayerFilters): Promise<Player[]> {
     if (filters.lastTransactionDays != null) {
       return this.getPlayersByRecentTransaction(filters)
+    }
+    if (filters.sortBy === "recentProfileTransaction") {
+      throw new Error(
+        "sortBy=recentProfileTransaction is handled in PlayerDataService (requires transaction join)",
+      )
     }
     const where = this.withDiscoveryEligible(filters)
     const orderBy = this.orderByFromFilters(filters)

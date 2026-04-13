@@ -216,6 +216,11 @@ export class PlayerRepository {
     if (filters.lastTransactionDays != null) {
       return this.getPlayersByRecentTransaction(filters)
     }
+    if (filters.sortBy === "recentProfileTransaction") {
+      throw new Error(
+        "sortBy=recentProfileTransaction is handled in PlayerDataService (requires transaction join)",
+      )
+    }
     const where = this.playerWhereFromFilters(filters)
     const orderBy = this.orderByFromFilters(filters)
     if (filters.limit == null) {
@@ -241,6 +246,24 @@ export class PlayerRepository {
       if (batch.length < DISCOVERY_SCAN_BATCH) break
     }
     return eligible.slice(filters.offset ?? 0, needEnd)
+  }
+
+  /** Id + name for every row matching filters + `discovery_eligible` (aligned with API list semantics). */
+  async listPlayerIdAndNameMatching(filters: PlayerFilters): Promise<{ id: string; name: string }[]> {
+    const where = {
+      AND: [this.playerWhereFromFilters(filters), { discoveryEligible: true }],
+    }
+    return prisma.player.findMany({
+      where,
+      select: { id: true, name: true },
+    })
+  }
+
+  async getPlayersByIdsInOrder(ids: string[]): Promise<Player[]> {
+    if (ids.length === 0) return []
+    const rows = await prisma.player.findMany({ where: { id: { in: ids } } })
+    const byId = new Map(rows.map((r) => [r.id, this.mapRow(r)]))
+    return ids.map((id) => byId.get(id)).filter((r): r is Player => r != null)
   }
 
   /** Lookup by primary key (`Player.id` = TBC `playerid`). */

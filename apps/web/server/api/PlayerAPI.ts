@@ -104,6 +104,13 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
       sortByRaw === "high_level"
     ) {
       sortBy = "experienceLevel"
+    } else if (
+      sortByRaw === "recentprofiletransaction" ||
+      sortByRaw === "recent_profile_transaction" ||
+      sortByRaw === "profiletransaction" ||
+      sortByRaw === "updates"
+    ) {
+      sortBy = "recentProfileTransaction"
     } else {
       throw new Error("Invalid sortBy")
     }

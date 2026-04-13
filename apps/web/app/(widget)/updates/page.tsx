@@ -1,26 +1,42 @@
 "use client"
 
 import Link from "next/link"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { PlayerCard } from "@/components/discovery/PlayerCard"
-import { buildPlayerListParams } from "@/lib/discovery-query"
-import { fetchPlayerSummaries, fetchPlayerSummaryForCard } from "@/lib/api"
+import { fetchPlayerSummaryForCard } from "@/lib/api"
 import { clearDiscoverySnapshot } from "@/lib/discovery-session"
-import { loadProfiles, type PlayerSearchProfile } from "@/lib/player-profiles"
 import {
-  markProfilePlayersSeen,
-  readProfileUpdatesSeen,
-  type ProfileSeenMap,
-} from "@/lib/profileUpdatesSeenStorage"
+  PROFILE_UPDATE_DISPLAY_LIMIT,
+  loadPendingMatchesForProfile,
+} from "@/lib/loadProfileUpdateMatches"
+import { acknowledgePlayerSnapshots, readProfileAcks, writeProfileAcks } from "@/lib/profileUpdatesAck"
+import { loadProfiles, type PlayerSearchProfile } from "@/lib/player-profiles"
 import { useUpdatesWatch } from "@/components/updates/UpdatesWatchProvider"
 import type { PlayerSummary } from "@available-player-portal/shared"
 
-const PROFILE_PREVIEW_LIMIT = 12
+function parseTransactionMs(d: string | null | undefined): number | null {
+  const s = d?.trim()
+  if (!s) return null
+  const t = Date.parse(`${s}T12:00:00.000Z`)
+  return Number.isNaN(t) ? null : t
+}
+
+/** Order profile sections by newest pending activity. */
+function maxPreviewTransactionMs(players: PlayerSummary[]): number {
+  let max = -Infinity
+  for (const pl of players) {
+    const t = parseTransactionMs(pl.mostRecentTransactionDate)
+    if (t != null) max = Math.max(max, t)
+  }
+  return max
+}
 
 type ProfileSectionState = {
   loading: boolean
   error: string | null
   players: PlayerSummary[]
+  /** Row count matching the profile (from API); used for empty copy. */
+  matchTotal: number | null
 }
 
 export default function UpdatesPage() {
@@ -35,15 +51,19 @@ export default function UpdatesPage() {
   const [watchedSummaries, setWatchedSummaries] = useState<PlayerSummary[]>([])
   const [watchedLoading, setWatchedLoading] = useState(true)
   const [watchedError, setWatchedError] = useState<string | null>(null)
-  const [seenMap, setSeenMap] = useState<ProfileSeenMap>({})
 
   const refreshProfiles = useCallback(() => {
     setProfiles(loadProfiles())
   }, [])
 
-  useEffect(() => {
-    setSeenMap(readProfileUpdatesSeen())
-  }, [])
+  const profilesOrdered = useMemo(() => {
+    return [...profiles].sort((a, b) => {
+      const sa = maxPreviewTransactionMs(byProfile[a.id]?.players ?? [])
+      const sb = maxPreviewTransactionMs(byProfile[b.id]?.players ?? [])
+      if (sb !== sa) return sb - sa
+      return a.name.localeCompare(b.name)
+    })
+  }, [profiles, byProfile])
 
   useEffect(() => {
     refreshProfiles()
@@ -60,24 +80,30 @@ export default function UpdatesPage() {
       return
     }
     let cancelled = false
+
     const next: Record<string, ProfileSectionState> = {}
     for (const p of profiles) {
-      next[p.id] = { loading: true, error: null, players: [] }
+      next[p.id] = { loading: true, error: null, players: [], matchTotal: null }
     }
     setByProfile(next)
 
     void (async () => {
       for (const p of profiles) {
         try {
-          const { players } = await fetchPlayerSummaries({
-            ...buildPlayerListParams(p.filters, p.onlyWithStats),
-            limit: PROFILE_PREVIEW_LIMIT,
-            offset: 0,
-          })
+          const acksNow = readProfileAcks()
+          const { players, acks, migratedAcksPersist, matchTotal } = await loadPendingMatchesForProfile(p, acksNow)
+          if (migratedAcksPersist) {
+            writeProfileAcks(acks)
+          }
           if (!cancelled) {
             setByProfile((prev) => ({
               ...prev,
-              [p.id]: { loading: false, error: null, players },
+              [p.id]: {
+                loading: false,
+                error: null,
+                players,
+                matchTotal,
+              },
             }))
           }
         } catch (e) {
@@ -88,6 +114,7 @@ export default function UpdatesPage() {
                 loading: false,
                 error: e instanceof Error ? e.message : "Failed to load",
                 players: [],
+                matchTotal: null,
               },
             }))
           }
@@ -137,17 +164,43 @@ export default function UpdatesPage() {
     }
   }, [watchIds])
 
-  /** “New” only after you’ve marked a profile at least once (baseline); then any newly appearing row is new. */
-  function isNewForProfile(profileId: string, playerId: string): boolean {
-    const list = seenMap[profileId]
-    if (!list || list.length === 0) return false
-    return !list.includes(playerId)
-  }
-
-  function handleMarkProfileRead(profileId: string, playerIds: string[]) {
-    if (playerIds.length === 0) return
-    markProfilePlayersSeen(profileId, playerIds)
-    setSeenMap(readProfileUpdatesSeen())
+  function handleMarkProfileRead(profileId: string, players: PlayerSummary[]) {
+    if (players.length === 0) return
+    acknowledgePlayerSnapshots(
+      profileId,
+      players.map((pl) => ({
+        playerId: pl.id,
+        mostRecentTransactionDate: pl.mostRecentTransactionDate?.trim() || null,
+      })),
+    )
+    void (async () => {
+      const p = profiles.find((x) => x.id === profileId)
+      if (!p) return
+      try {
+        const { players: nextPlayers, acks, migratedAcksPersist, matchTotal } =
+          await loadPendingMatchesForProfile(p, readProfileAcks())
+        if (migratedAcksPersist) writeProfileAcks(acks)
+        setByProfile((prev) => ({
+          ...prev,
+          [profileId]: {
+            loading: false,
+            error: null,
+            players: nextPlayers,
+            matchTotal,
+          },
+        }))
+      } catch (e) {
+        setByProfile((prev) => ({
+          ...prev,
+          [profileId]: {
+            loading: false,
+            error: e instanceof Error ? e.message : "Failed to load",
+            players: [],
+            matchTotal: null,
+          },
+        }))
+      }
+    })()
   }
 
   return (
@@ -167,11 +220,12 @@ export default function UpdatesPage() {
           <Link href="/preferences" className="font-semibold text-[#4A5F78] underline dark:text-portal-accent">
             Preferences
           </Link>
-          . Use <strong>Mark as read</strong> to set a baseline; players that appear in the list later show a{" "}
-          <strong>New</strong> badge until you mark again.
+          . Only players with <strong>new</strong> updates (or not yet marked read) appear — up to{" "}
+          {PROFILE_UPDATE_DISPLAY_LIMIT} at a time. Use <strong>Mark as read</strong> to see the next batch. If
+          someone&apos;s transaction history changes again, they show up here again.
         </p>
 
-        {profiles.length === 0 ? (
+        {profilesOrdered.length === 0 ? (
           <p className="mt-4 rounded-portal-sm border border-dashed border-portal-filter-border bg-portal-surface px-4 py-6 text-sm text-neutral-600 dark:border-neutral-600 dark:text-neutral-400">
             No saved profiles yet.{" "}
             <Link href="/preferences" className="font-semibold text-[#4A5F78] underline dark:text-portal-accent">
@@ -181,22 +235,32 @@ export default function UpdatesPage() {
           </p>
         ) : (
           <div className="mt-6 flex flex-col gap-8">
-            {profiles.map((p) => {
+            {profilesOrdered.map((p) => {
               const state = byProfile[p.id]
               const players = state?.players ?? []
+              const matchTotal = state?.matchTotal
+              const caughtUp =
+                !state?.loading &&
+                !state?.error &&
+                players.length === 0 &&
+                matchTotal != null &&
+                matchTotal > 0
               return (
-                <div key={p.id} className="rounded-portal-lg border border-portal-filter-border bg-portal-filter-bg/20 p-4 dark:border-neutral-600/50">
+                <div
+                  key={p.id}
+                  className="rounded-portal-lg border border-portal-filter-border bg-portal-filter-bg/20 p-4 dark:border-neutral-600/50"
+                >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <h3 className="font-semibold text-neutral-900 dark:text-neutral-100">{p.name}</h3>
                       <p className="text-xs text-neutral-500 dark:text-neutral-500">
-                        Recent matches (up to {PROFILE_PREVIEW_LIMIT})
+                        Updates (up to {PROFILE_UPDATE_DISPLAY_LIMIT} at a time)
                       </p>
                     </div>
                     {players.length > 0 ? (
                       <button
                         type="button"
-                        onClick={() => handleMarkProfileRead(p.id, players.map((x) => x.id))}
+                        onClick={() => handleMarkProfileRead(p.id, players)}
                         className="shrink-0 rounded-portal-sm border border-portal-filter-border bg-portal-surface px-3 py-1.5 text-xs font-semibold text-[#4A5F78] shadow-portal-card transition hover:border-portal-accent dark:text-portal-accent"
                       >
                         Mark as read
@@ -207,19 +271,25 @@ export default function UpdatesPage() {
                     <p className="mt-4 text-sm text-neutral-500">Loading…</p>
                   ) : state?.error ? (
                     <p className="mt-4 text-sm text-red-700 dark:text-red-400">{state.error}</p>
+                  ) : players.length === 0 && matchTotal === 0 ? (
+                    <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">
+                      No players match this profile right now.
+                    </p>
+                  ) : caughtUp ? (
+                    <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">
+                      You&apos;re caught up — no new updates for this profile. Check back after more transaction
+                      activity, or review matches in{" "}
+                      <Link href="/dashboard" className="font-semibold text-[#4A5F78] underline dark:text-portal-accent">
+                        Discovery
+                      </Link>
+                      .
+                    </p>
                   ) : players.length === 0 ? (
-                    <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">No players match this profile right now.</p>
+                    <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">No new updates right now.</p>
                   ) : (
                     <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                       {players.map((pl) => (
-                        <div key={pl.id} className="relative">
-                          {isNewForProfile(p.id, pl.id) ? (
-                            <span className="absolute left-2 top-2 z-20 rounded bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white shadow-sm">
-                              New
-                            </span>
-                          ) : null}
-                          <PlayerCard player={pl} className="!max-w-none" />
-                        </div>
+                        <PlayerCard key={pl.id} player={pl} className="!max-w-none" />
                       ))}
                     </div>
                   )}
