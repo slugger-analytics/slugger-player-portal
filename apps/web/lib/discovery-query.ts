@@ -2,15 +2,39 @@ import { filtersToQuery, type UiFilter } from "@/components/discovery/DiscoveryF
 import type { PlayerSearchProfile } from "@/lib/player-profiles"
 
 /** Builds `GET /players` query params from filters + optional stats-available flag. */
+export type DiscoverySortOption = "newestTransaction" | "lastName" | "transactionType"
+export type DiscoveryTransactionType = "retired" | "released" | "freeAgent"
+
+function applyDiscoverySort(
+  q: Record<string, string | number | boolean | undefined>,
+  sort: DiscoverySortOption,
+  transactionTypes: DiscoveryTransactionType[],
+): Record<string, string | number | boolean | undefined> {
+  if (sort === "newestTransaction") {
+    q.sortBy = "recentProfileTransaction"
+    q.sortDir = "desc"
+  } else if (sort === "lastName") {
+    q.sortBy = "lastName"
+    q.sortDir = "asc"
+  } else if (sort === "transactionType") {
+    q.sortBy = "recentProfileTransaction"
+    q.sortDir = "desc"
+    q.transactionTypes = transactionTypes.join(",")
+  }
+  return q
+}
+
 export function buildPlayerListParams(
   filters: UiFilter[],
   onlyWithStats: boolean,
+  sort: DiscoverySortOption = "newestTransaction",
+  transactionTypes: DiscoveryTransactionType[] = [],
 ): Record<string, string | number | boolean | undefined> {
   const q: Record<string, string | number | boolean | undefined> = {
     ...filtersToQuery(filters),
   }
   if (onlyWithStats) q.hasStats = true
-  return q
+  return applyDiscoverySort(q, sort, transactionTypes)
 }
 
 export type DiscoverySearchMode = "custom" | "profile"
@@ -24,13 +48,15 @@ export function buildDiscoveryListParams(
   selectedProfileId: string,
   customFilters: UiFilter[],
   customOnlyWithStats: boolean,
+  sort: DiscoverySortOption = "newestTransaction",
+  transactionTypes: DiscoveryTransactionType[] = [],
 ): Record<string, string | number | boolean | undefined> {
   if (searchMode === "profile") {
     const p = profiles.find((x) => x.id === selectedProfileId)
-    if (!p) return buildPlayerListParams([], false)
-    return buildPlayerListParams(p.filters, p.onlyWithStats)
+    if (!p) return buildPlayerListParams([], false, sort, transactionTypes)
+    return buildPlayerListParams(p.filters, p.onlyWithStats, sort, transactionTypes)
   }
-  return buildPlayerListParams(customFilters, customOnlyWithStats)
+  return buildPlayerListParams(customFilters, customOnlyWithStats, sort, transactionTypes)
 }
 
 export function profileSummaryLine(filters: UiFilter[], onlyWithStats: boolean): string {

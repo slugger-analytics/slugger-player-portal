@@ -18,6 +18,11 @@ import { fetchPlayerProfile } from "@/lib/api"
 
 type Props = { params: Promise<{ id: string }> }
 
+function isPitcherPosition(position: string): boolean {
+  const pos = position.trim().toLowerCase()
+  return pos === "p" || pos.startsWith("p-") || pos.includes("pitch")
+}
+
 export default async function PlayerDetailPage({ params }: Props) {
   const { id } = await params
   let profile
@@ -28,6 +33,7 @@ export default async function PlayerDetailPage({ params }: Props) {
   }
 
   const p = profile.player
+  const showPitching = isPitcherPosition(p.position ?? "")
 
   return (
     <main className="px-4 pb-10 sm:px-5">
@@ -75,25 +81,28 @@ export default async function PlayerDetailPage({ params }: Props) {
         </div>
       </header>
 
-      <section className="mb-8 grid gap-8 md:grid-cols-2">
-        <div>
-          <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-portal-accent">
-            Batting
-          </h2>
-          <BattingTable
-            recent={profile.mostRecentBatting}
-            previous={profile.previousBatting}
-          />
-        </div>
-        <div>
-          <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-portal-accent">
-            Pitching
-          </h2>
-          <PitchingTable
-            recent={profile.mostRecentPitching}
-            previous={profile.previousPitching}
-          />
-        </div>
+      <section className="mb-8">
+        {showPitching ? (
+          <div>
+            <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-portal-accent">
+              Pitching
+            </h2>
+            <PitchingTable
+              recent={profile.mostRecentPitching}
+              previous={profile.previousPitching}
+            />
+          </div>
+        ) : (
+          <div>
+            <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-portal-accent">
+              Batting
+            </h2>
+            <BattingTable
+              recent={profile.mostRecentBatting}
+              previous={profile.previousBatting}
+            />
+          </div>
+        )}
       </section>
 
       <section>

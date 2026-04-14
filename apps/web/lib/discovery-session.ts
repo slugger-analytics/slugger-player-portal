@@ -5,6 +5,7 @@
  */
 
 import type { UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
+import type { DiscoverySortOption, DiscoveryTransactionType } from "@/lib/discovery-query"
 
 const SNAPSHOT_KEY = "portal-discovery-return-snapshot"
 
@@ -13,6 +14,8 @@ export type DiscoverySnapshot = {
   customFilters: UiFilter[]
   customOnlyWithStats: boolean
   selectedProfileId: string
+  sort: DiscoverySortOption
+  transactionTypes: DiscoveryTransactionType[]
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -36,11 +39,38 @@ function parseSnapshot(raw: string): DiscoverySnapshot | null {
     if (typeof ow !== "boolean") return null
     const sp = parsed.selectedProfileId
     if (typeof sp !== "string") return null
+    const sortRaw = parsed.sort
+    const sort: DiscoverySortOption =
+      sortRaw === undefined || sortRaw === "newestTransaction"
+        ? "newestTransaction"
+        : sortRaw === "lastName"
+          ? "lastName"
+          : sortRaw === "transactionType"
+            ? "transactionType"
+            : (() => {
+                throw new Error("Invalid discovery sort")
+              })()
+    const ttRaw = parsed.transactionTypes
+    const transactionTypes: DiscoveryTransactionType[] =
+      ttRaw === undefined
+        ? []
+        : Array.isArray(ttRaw)
+          ? ttRaw.filter(
+              (v): v is DiscoveryTransactionType => v === "retired" || v === "released" || v === "freeAgent",
+            )
+          : (() => {
+              throw new Error("Invalid transactionTypes")
+            })()
+    if (Array.isArray(ttRaw) && transactionTypes.length !== ttRaw.length) {
+      throw new Error("Invalid transactionTypes")
+    }
     return {
       searchMode: sm,
       customFilters: cf,
       customOnlyWithStats: ow,
       selectedProfileId: sp,
+      sort,
+      transactionTypes,
     }
   } catch {
     return null

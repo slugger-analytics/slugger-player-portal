@@ -20,7 +20,19 @@ type Props = {
   onBeforeNavigate?: () => void
 }
 
+function isPitcherPosition(position: string): boolean {
+  const pos = position.trim().toLowerCase()
+  return pos === "p" || pos.startsWith("p-") || pos.includes("pitch")
+}
+
 export function PlayerCard({ player, className = "", onBeforeNavigate }: Props) {
+  const mostRecentTransactionDate = player.mostRecentTransactionDate
+    ? new Date(`${player.mostRecentTransactionDate}T12:00:00.000Z`).toLocaleDateString(undefined, {
+        dateStyle: "medium",
+      })
+    : "—"
+  const statLabels = isPitcherPosition(player.position) ? "ERA / WHIP / K" : "AVG / OBP / SLG"
+
   return (
     <Link
       href={`/players/${encodeURIComponent(player.id)}`}
@@ -39,7 +51,11 @@ export function PlayerCard({ player, className = "", onBeforeNavigate }: Props) 
         <div className="mt-1 break-words text-xs font-medium text-neutral-600 dark:text-neutral-400">{player.position}</div>
         <div className="break-words text-xs text-neutral-500 dark:text-neutral-500">{player.team}</div>
         <div className="mt-1.5 break-words font-mono text-[11px] leading-snug text-neutral-800 dark:text-neutral-300">
+          <span className="font-semibold text-neutral-600 dark:text-neutral-400">{statLabels}: </span>
           {player.minimalStatLine}
+        </div>
+        <div className="mt-1 break-words text-[11px] leading-snug text-neutral-600 dark:text-neutral-400">
+          Most recent transaction: {mostRecentTransactionDate}
         </div>
       </div>
     </Link>

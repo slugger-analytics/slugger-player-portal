@@ -52,8 +52,11 @@ export class PlayerDataService {
 
   /** List + total row count for `GET /players` pagination (`limit` / `offset`). */
   async listPlayerSummariesWithTotal(filters: PlayerFilters): Promise<PlayerSummariesResponse> {
-    if (filters.sortBy === "recentProfileTransaction" && filters.lastTransactionDays == null) {
-      return this.listPlayerSummariesWithTotalByProfileTransactionRecency(filters)
+    if (
+      (filters.sortBy === "recentProfileTransaction" && filters.lastTransactionDays == null) ||
+      filters.sortBy === "lastName"
+    ) {
+      return this.listPlayerSummariesWithCustomOrdering(filters)
     }
     const [total, list] = await Promise.all([
       this.players.countPlayers(filters),
@@ -73,27 +76,40 @@ export class PlayerDataService {
     return { players, total }
   }
 
-  private async listPlayerSummariesWithTotalByProfileTransactionRecency(
-    filters: PlayerFilters,
-  ): Promise<PlayerSummariesResponse> {
+  private async listPlayerSummariesWithCustomOrdering(filters: PlayerFilters): Promise<PlayerSummariesResponse> {
     const candidates = await this.players.listPlayerIdAndNameMatching(filters)
-    const total = candidates.length
-    if (total === 0) return { players: [], total: 0 }
+    if (candidates.length === 0) return { players: [], total: 0 }
     const ids = candidates.map((c) => c.id)
-    const txMap = await this.transactions.getMaxTransactionDatesByPlayerIds(ids)
-    const sorted = [...candidates].sort((a, b) => {
-      const da = txMap.get(a.id)
-      const db = txMap.get(b.id)
-      const aHas = da != null
-      const bHas = db != null
-      if (aHas && bHas && da !== db) return db!.localeCompare(da!)
-      if (aHas && !bHas) return -1
-      if (!aHas && bHas) return 1
-      return a.name.localeCompare(b.name)
-    })
+    const txMap = await this.transactions.getMaxTransactionDatesByPlayerIds(ids, filters.transactionTypes)
+    const sorted =
+      filters.sortBy === "lastName"
+        ? [...candidates].sort((a, b) => {
+            const aLast = a.name.trim().split(/\s+/).at(-1)?.toLowerCase() ?? ""
+            const bLast = b.name.trim().split(/\s+/).at(-1)?.toLowerCase() ?? ""
+            if (aLast !== bLast) return aLast.localeCompare(bLast)
+            return a.name.localeCompare(b.name)
+          })
+        : [...candidates].sort((a, b) => {
+            const da = txMap.get(a.id)
+            const db = txMap.get(b.id)
+            const aHas = da != null
+            const bHas = db != null
+            if (aHas && bHas && da !== db) return db!.localeCompare(da!)
+            if (aHas && !bHas) return -1
+            if (!aHas && bHas) return 1
+            const aLast = a.name.trim().split(/\s+/).at(-1)?.toLowerCase() ?? ""
+            const bLast = b.name.trim().split(/\s+/).at(-1)?.toLowerCase() ?? ""
+            if (aLast !== bLast) return aLast.localeCompare(bLast)
+            return a.name.localeCompare(b.name)
+          })
+    const filtered =
+      filters.sortBy === "recentProfileTransaction" && (filters.transactionTypes?.length ?? 0) > 0
+        ? sorted.filter((c) => txMap.has(c.id))
+        : sorted
+    const total = filtered.length
     const offset = filters.offset ?? 0
-    const limit = filters.limit != null ? filters.limit : sorted.length
-    const slice = sorted.slice(offset, offset + limit)
+    const limit = filters.limit != null ? filters.limit : filtered.length
+    const slice = filtered.slice(offset, offset + limit)
     const list = await this.players.getPlayersByIdsInOrder(slice.map((s) => s.id))
     if (list.length === 0) return { players: [], total }
     const txMaxById = await this.transactions.getMaxTransactionDatesByPlayerIds(list.map((p) => p.id))

@@ -53,6 +53,8 @@ export interface PitchingStats {
   k: number
 }
 
+export type TransactionTypeFilter = "retired" | "released" | "freeAgent"
+
 export interface PlayerFilters {
   position?: string
   status?: string
@@ -75,7 +77,7 @@ export interface PlayerFilters {
    * `recentProfileTransaction` = newest profile-visible transaction date first (then name); requires
    * API support that joins transaction data. Omit `lastTransactionDays` when using this sort.
    */
-  sortBy?: "name" | "experienceLevel" | "recentProfileTransaction"
+  sortBy?: "name" | "lastName" | "experienceLevel" | "recentProfileTransaction"
   /**
    * `asc` | `desc`. When omitted: `asc` for name, `desc` for experience level (MLB first).
    */
@@ -86,6 +88,8 @@ export interface PlayerFilters {
    * Allowed values: {@link LAST_TRANSACTION_DAYS_OPTIONS}.
    */
   lastTransactionDays?: number
+  /** Optional profile-visible transaction type filter used by discovery sorting/filtering. */
+  transactionTypes?: TransactionTypeFilter[]
   /** Exact match on {@link Player.bats} (L, R, B). Query: `bats`. */
   bats?: BatHand
   /** Exact match on {@link Player.throws} (L, R). Query: `throws`. */

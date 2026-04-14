@@ -50,9 +50,7 @@ export default function FavoritesPage() {
     <main className="px-4 pb-10 sm:px-5">
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-black">Favorites</h1>
-        <p className="mt-1 text-sm text-neutral-600">
-          Your list is saved in this browser only. Use the arrows to set your ranking (#1 is top).
-        </p>
+        <p className="mt-1 text-sm text-neutral-600">Use the arrows to set your ranking (#1 is top).</p>
       </div>
 
       {favoriteIds.length === 0 ? (

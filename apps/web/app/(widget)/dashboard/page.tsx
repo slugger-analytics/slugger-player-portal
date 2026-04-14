@@ -13,7 +13,11 @@ import { PreferenceFiltersPanel } from "@/components/discovery/PreferenceFilters
 import type { UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
 import { fetchPlayerSummaries } from "@/lib/api"
 import { withBasePath } from "@/lib/base-path"
-import { buildDiscoveryListParams } from "@/lib/discovery-query"
+import {
+  buildDiscoveryListParams,
+  type DiscoverySortOption,
+  type DiscoveryTransactionType,
+} from "@/lib/discovery-query"
 import {
   saveDiscoverySnapshotForPlayerNavigation,
   takeDiscoverySnapshot,
@@ -43,6 +47,13 @@ export default function PlayerDiscoveryHomePage() {
   const [customOnlyWithStats, setCustomOnlyWithStats] = useState(false)
   const [profiles, setProfiles] = useState<PlayerSearchProfile[]>([])
   const [selectedProfileId, setSelectedProfileId] = useState("")
+  const [sort, setSort] = useState<DiscoverySortOption>("newestTransaction")
+  const [transactionTypes, setTransactionTypes] = useState<DiscoveryTransactionType[]>([
+    "retired",
+    "released",
+    "freeAgent",
+  ])
+  const [transactionTypeModalOpen, setTransactionTypeModalOpen] = useState(false)
   const [players, setPlayers] = useState<PlayerSummary[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -61,6 +72,8 @@ export default function PlayerDiscoveryHomePage() {
       setCustomFilters(snap.customFilters)
       setCustomOnlyWithStats(snap.customOnlyWithStats)
       setSelectedProfileId(snap.selectedProfileId)
+      setSort(snap.sort)
+      setTransactionTypes(snap.transactionTypes)
     }
     setDiscoveryReady(true)
   }, [])
@@ -91,8 +104,16 @@ export default function PlayerDiscoveryHomePage() {
 
   const filterParams = useMemo(
     () =>
-      buildDiscoveryListParams(searchMode, profiles, selectedProfileId, customFilters, customOnlyWithStats),
-    [searchMode, profiles, selectedProfileId, customFilters, customOnlyWithStats],
+      buildDiscoveryListParams(
+        searchMode,
+        profiles,
+        selectedProfileId,
+        customFilters,
+        customOnlyWithStats,
+        sort,
+        transactionTypes,
+      ),
+    [searchMode, profiles, selectedProfileId, customFilters, customOnlyWithStats, sort, transactionTypes],
   )
 
   const filterParamsRef = useRef(filterParams)
@@ -111,6 +132,8 @@ export default function PlayerDiscoveryHomePage() {
       selectedProfileId,
       customFilters,
       customOnlyWithStats,
+      sort,
+      transactionTypes,
     )
     fetchPlayerSummaries({
       ...params,
@@ -132,7 +155,16 @@ export default function PlayerDiscoveryHomePage() {
     return () => {
       cancelled = true
     }
-  }, [discoveryReady, searchMode, profiles, selectedProfileId, customFilters, customOnlyWithStats])
+  }, [
+    discoveryReady,
+    searchMode,
+    profiles,
+    selectedProfileId,
+    customFilters,
+    customOnlyWithStats,
+    sort,
+    transactionTypes,
+  ])
 
   /** After “Refresh database” sync: reload first page without blanking the grid (sync button already shows progress). */
   useEffect(() => {
@@ -199,13 +231,10 @@ export default function PlayerDiscoveryHomePage() {
       if (!res.ok || body.ok === false) {
         throw new Error(typeof body.error === "string" ? body.error : `Sync failed (${res.status})`)
       }
-      const parsed = body.players ?? 0
-      const playerPhrase =
-        parsed === 1 ? "1 player parsed" : `${parsed.toLocaleString()} players parsed`
       const at = new Date().toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
       setSyncBanner({
         variant: "success",
-        text: `Database updated: ${playerPhrase} at ${at}.`,
+        text: `Database successfully updated at ${at}.`,
       })
       setRefreshTick((t) => t + 1)
     } catch (e) {
@@ -226,7 +255,13 @@ export default function PlayerDiscoveryHomePage() {
       customFilters,
       customOnlyWithStats,
       selectedProfileId,
+      sort,
+      transactionTypes,
     })
+  }
+
+  function toggleTransactionType(type: DiscoveryTransactionType) {
+    setTransactionTypes((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]))
   }
 
   return (
@@ -294,6 +329,32 @@ export default function PlayerDiscoveryHomePage() {
               Saved profile
             </button>
           </div>
+
+          <label className="mb-3 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+            Sort results
+            <select
+              value={sort}
+              onChange={(e) => {
+                const next = e.target.value as DiscoverySortOption
+                setSort(next)
+                if (next === "transactionType") setTransactionTypeModalOpen(true)
+              }}
+              className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm text-neutral-900 focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600 dark:text-neutral-100"
+            >
+              <option value="newestTransaction">Newest transactions (default)</option>
+              <option value="lastName">Last name</option>
+              <option value="transactionType">Transaction type</option>
+            </select>
+          </label>
+          {sort === "transactionType" ? (
+            <button
+              type="button"
+              onClick={() => setTransactionTypeModalOpen(true)}
+              className="mb-3 rounded-portal-sm border border-portal-filter-border bg-portal-surface px-3 py-2 text-sm font-medium text-[#4A5F78] shadow-portal-card hover:border-portal-accent dark:text-portal-accent"
+            >
+              Choose transaction types ({transactionTypes.length} selected)
+            </button>
+          ) : null}
 
           {searchMode === "custom" ? (
             <>
@@ -433,6 +494,59 @@ export default function PlayerDiscoveryHomePage() {
           </div>
         </section>
       </div>
+      {transactionTypeModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
+          <div className="w-full max-w-sm rounded-portal-sm border border-portal-filter-border bg-portal-surface p-4 shadow-portal">
+            <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">Transaction types</h3>
+            <p className="mt-1 text-xs text-neutral-500">Players are sorted by newest matching transaction.</p>
+            <div className="mt-3 space-y-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={transactionTypes.includes("retired")}
+                  onChange={() => toggleTransactionType("retired")}
+                />
+                Retired
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={transactionTypes.includes("released")}
+                  onChange={() => toggleTransactionType("released")}
+                />
+                Released
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={transactionTypes.includes("freeAgent")}
+                  onChange={() => toggleTransactionType("freeAgent")}
+                />
+                Free agent
+              </label>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setTransactionTypes(["retired", "released", "freeAgent"])
+                  setTransactionTypeModalOpen(false)
+                }}
+                className="rounded-portal-sm border border-neutral-300 px-3 py-2 text-sm"
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                onClick={() => setTransactionTypeModalOpen(false)}
+                className="rounded-portal-sm bg-portal-accent px-3 py-2 text-sm text-white"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   )
 }

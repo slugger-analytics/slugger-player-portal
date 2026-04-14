@@ -47,6 +47,8 @@ model Player {
   throws             ThrowHand?       @map("throws")
   /// Discovery list filter; set on upsert from isPlayerDiscoveryEligible (see playerEligibility.ts).
   discoveryEligible  Boolean          @default(true) @map("discovery_eligible")
+  /// At least one profile-visible transaction (retired / released / free agent); maintained when transactions sync.
+  hasProfileVisibleTransaction Boolean @default(false) @map("has_profile_visible_transaction")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 

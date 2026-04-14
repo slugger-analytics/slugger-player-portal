@@ -19,15 +19,18 @@ import {
   isBatHandQueryValue,
   isLastTransactionDaysOption,
   isThrowHandQueryValue,
+  type TransactionTypeFilter,
   type ThrowHand,
   parseExperienceLevelFilterInput,
 } from "@available-player-portal/shared"
 import { Router } from "express"
 import type { PlayerFilters } from "../types/models"
 import { PlayerDataService } from "../services/PlayerDataService"
+import { PlayerRepository } from "../repositories/PlayerRepository"
 import { TransactionRepository } from "../repositories/TransactionRepository"
 
 const playerData = new PlayerDataService()
+const playersRepo = new PlayerRepository()
 /** Single-table read for the dedicated transactions endpoint (no cross-repo join). */
 const transactions = new TransactionRepository()
 
@@ -36,6 +39,23 @@ function firstString(q: unknown): string | undefined {
   if (typeof q === "string") return q
   if (Array.isArray(q) && typeof q[0] === "string") return q[0]
   return undefined
+}
+
+function parseTransactionTypesQuery(query: Record<string, unknown>): TransactionTypeFilter[] | undefined {
+  const raw = firstString(query.transactionTypes)
+  if (raw == null || raw.trim() === "") return undefined
+  const values = raw
+    .split(",")
+    .map((v) => v.trim().toLowerCase())
+    .filter(Boolean)
+  const out: TransactionTypeFilter[] = []
+  for (const v of values) {
+    if (v === "retired") out.push("retired")
+    else if (v === "released") out.push("released")
+    else if (v === "freeagent" || v === "free_agent" || v === "free-agent") out.push("freeAgent")
+    else throw new Error("Invalid transactionTypes")
+  }
+  return out.length ? [...new Set(out)] : undefined
 }
 
 /** Maps `req.query` into {@link PlayerFilters}; throws if `ageMin`/`ageMax` are invalid. */
@@ -97,6 +117,7 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
   const sortByRaw = firstString(query.sortBy)?.trim().toLowerCase()
   if (sortByRaw != null && sortByRaw !== "") {
     if (sortByRaw === "name") sortBy = "name"
+    else if (sortByRaw === "lastname" || sortByRaw === "last_name") sortBy = "lastName"
     else if (
       sortByRaw === "experiencelevel" ||
       sortByRaw === "experience_level" ||
@@ -151,6 +172,7 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     if (!isThrowHandQueryValue(throwsRaw)) throw new Error("Invalid throws")
     throws = throwsRaw.trim().toUpperCase() as ThrowHand
   }
+  const transactionTypes = parseTransactionTypesQuery(query)
 
   return {
     position,
@@ -165,6 +187,7 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     sortBy,
     sortDir,
     lastTransactionDays,
+    transactionTypes,
     bats,
     throws,
   }
@@ -208,6 +231,11 @@ export function createPlayerRouter(): Router {
   r.get("/:id/transactions", async (req, res, next) => {
     try {
       const { id } = req.params
+      const portal = await playersRepo.getPlayerById(id)
+      if (!portal) {
+        res.status(404).json({ error: "Player not found" })
+        return
+      }
       const list = await transactions.getTransactionsByPlayer(id)
       res.json(list)
     } catch (e) {

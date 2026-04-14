@@ -99,6 +99,7 @@ export class PlayerRepository {
     opts?: { omitLastTransactionRecency?: boolean },
   ): Prisma.PlayerWhereInput {
     const clauses = this.collectDiscoveryWhereClauses(filters, opts)
+    clauses.push({ hasProfileVisibleTransaction: true })
     clauses.push({ discoveryEligible: true })
     return this.combineWhereClauses(clauses)
   }
@@ -207,9 +208,9 @@ export class PlayerRepository {
     if (filters.lastTransactionDays != null) {
       return this.getPlayersByRecentTransaction(filters)
     }
-    if (filters.sortBy === "recentProfileTransaction") {
+    if (filters.sortBy === "recentProfileTransaction" || filters.sortBy === "lastName") {
       throw new Error(
-        "sortBy=recentProfileTransaction is handled in PlayerDataService (requires transaction join)",
+        "sortBy=recentProfileTransaction|lastName is handled in PlayerDataService (custom ordering)",
       )
     }
     const where = this.withDiscoveryEligible(filters)
@@ -228,9 +229,11 @@ export class PlayerRepository {
       .then((rows) => rows.map((r) => this.mapRow(r)))
   }
 
-  /** Lookup by primary key (`Player.id` = TBC `playerid`). */
+  /** Lookup by primary key; only players with at least one profile-visible transaction (portal-visible). */
   async getPlayerById(id: string): Promise<Player | null> {
-    const r = await prisma.player.findUnique({ where: { id } })
+    const r = await prisma.player.findFirst({
+      where: { id, hasProfileVisibleTransaction: true },
+    })
     if (!r) return null
     return {
       id: r.id,

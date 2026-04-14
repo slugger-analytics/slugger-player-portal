@@ -9,6 +9,7 @@
     "db:generate": "node scripts/prisma-with-env.cjs generate",
     "db:push": "node scripts/prisma-with-env.cjs db push",
     "db:migrate": "node scripts/prisma-with-env.cjs migrate dev",
+    "db:migrate:deploy": "node scripts/prisma-with-env.cjs migrate deploy",
     "sync": "tsx src/jobs/syncPipeline.ts",
     "sync:ts-node": "ts-node --transpile-only src/jobs/syncPipeline.ts",
     "lint": "echo \"no linter configured\""
