@@ -12,6 +12,11 @@ import { PlayerAvatarPlaceholder } from "@/components/discovery/PlayerAvatarPlac
 import { FavoriteHeartButton } from "@/components/favorites/FavoriteHeartButton"
 import { PlayerUpdatesBellButton } from "@/components/updates/PlayerUpdatesBellButton"
 
+/** Strikeouts: normalize legacy `SO:` / `k:` from API to `K:` on the card. */
+function normalizePitchingStrikeoutLabel(line: string): string {
+  return line.replace(/\bSO\s*:/gi, "K:").replace(/\bk\s*:/g, "K:")
+}
+
 type Props = {
   player: PlayerSummary
   /** Merged onto the card link (e.g. `!max-w-none min-w-0` for grid layouts). */
@@ -20,18 +25,12 @@ type Props = {
   onBeforeNavigate?: () => void
 }
 
-function isPitcherPosition(position: string): boolean {
-  const pos = position.trim().toLowerCase()
-  return pos === "p" || pos.startsWith("p-") || pos.includes("pitch")
-}
-
 export function PlayerCard({ player, className = "", onBeforeNavigate }: Props) {
   const mostRecentTransactionDate = player.mostRecentTransactionDate
     ? new Date(`${player.mostRecentTransactionDate}T12:00:00.000Z`).toLocaleDateString(undefined, {
         dateStyle: "medium",
       })
     : "—"
-  const statLabels = isPitcherPosition(player.position) ? "ERA / WHIP / SO" : "AVG / OBP / SLG"
   const maxLevel = experienceLevelDisplayLabel(player.experienceLevel)
   const rankScoreOutOf100 = player.rankScore != null ? Math.round(player.rankScore * 100) : null
   const profileHref =
@@ -58,8 +57,7 @@ export function PlayerCard({ player, className = "", onBeforeNavigate }: Props) 
         <div className="break-words text-xs text-neutral-500 dark:text-neutral-500">{player.team}</div>
         <div className="mt-0.5 break-words text-xs text-neutral-500 dark:text-neutral-500">Max level: {maxLevel}</div>
         <div className="mt-1.5 break-words font-mono text-[11px] leading-snug text-neutral-800 dark:text-neutral-300">
-          <span className="font-semibold text-neutral-600 dark:text-neutral-400">{statLabels}: </span>
-          {player.minimalStatLine}
+          {normalizePitchingStrikeoutLabel(player.minimalStatLine)}
         </div>
         <div className="mt-1 break-words text-[11px] leading-snug text-neutral-600 dark:text-neutral-400">
           Most recent transaction: {mostRecentTransactionDate}

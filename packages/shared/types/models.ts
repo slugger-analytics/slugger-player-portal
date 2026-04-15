@@ -44,6 +44,8 @@ export interface BattingStats {
   slg: number
   ops: number
   bb: number
+  /** Home runs (TBC batting feed `hr` / `HR`). */
+  hr: number
 }
 
 export interface PitchingStats {

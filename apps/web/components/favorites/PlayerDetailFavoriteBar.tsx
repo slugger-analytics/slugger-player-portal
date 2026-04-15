@@ -21,8 +21,8 @@ export function PlayerDetailFavoriteBar({ playerId, playerName }: Props) {
         ; heart = ranked{" "}
         <Link href="/favorites" className="font-semibold text-portal-accent hover:underline">
           favorites
-        </Link>{" "}
-        (this browser only).
+        </Link>
+        .
       </span>
     </div>
   )

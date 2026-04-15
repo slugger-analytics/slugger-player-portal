@@ -54,6 +54,7 @@ export class BattingStatsRepository {
     slg: InstanceType<typeof Prisma.Decimal>
     ops: InstanceType<typeof Prisma.Decimal>
     bb: number
+    hr: number
   }): BattingStats {
     return {
       playerId: r.playerId,
@@ -64,6 +65,7 @@ export class BattingStatsRepository {
       slg: Number(r.slg),
       ops: Number(r.ops),
       bb: r.bb,
+      hr: r.hr,
     }
   }
 
@@ -76,10 +78,10 @@ export class BattingStatsRepository {
     for (let i = 0; i < uniqueStats.length; i += SYNC_UPSERT_CHUNK) {
       const chunk = uniqueStats.slice(i, i + SYNC_UPSERT_CHUNK)
       const rows = chunk.map((s) =>
-        Prisma.sql`(${s.playerId}, ${s.season}, ${s.teamName ?? ""}, ${new Prisma.Decimal(s.avg.toFixed(3))}, ${new Prisma.Decimal(s.obp.toFixed(3))}, ${new Prisma.Decimal(s.slg.toFixed(3))}, ${new Prisma.Decimal(s.ops.toFixed(3))}, ${s.bb})`,
+        Prisma.sql`(${s.playerId}, ${s.season}, ${s.teamName ?? ""}, ${new Prisma.Decimal(s.avg.toFixed(3))}, ${new Prisma.Decimal(s.obp.toFixed(3))}, ${new Prisma.Decimal(s.slg.toFixed(3))}, ${new Prisma.Decimal(s.ops.toFixed(3))}, ${s.bb}, ${s.hr})`,
       )
       await prisma.$executeRaw(Prisma.sql`
-        INSERT INTO "BattingStat" ("player_id","season","team_name","avg","obp","slg","ops","bb")
+        INSERT INTO "BattingStat" ("player_id","season","team_name","avg","obp","slg","ops","bb","hr")
         VALUES ${Prisma.join(rows)}
         ON CONFLICT ("player_id","season","team_name") DO UPDATE SET
           "team_name" = EXCLUDED."team_name",
@@ -87,7 +89,8 @@ export class BattingStatsRepository {
           "obp" = EXCLUDED."obp",
           "slg" = EXCLUDED."slg",
           "ops" = EXCLUDED."ops",
-          "bb" = EXCLUDED."bb"
+          "bb" = EXCLUDED."bb",
+          "hr" = EXCLUDED."hr"
       `)
     }
   }

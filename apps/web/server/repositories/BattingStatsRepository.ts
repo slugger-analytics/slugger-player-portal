@@ -31,6 +31,7 @@ export class BattingStatsRepository {
       slg: Number(r.slg),
       ops: Number(r.ops),
       bb: r.bb,
+      hr: r.hr,
     }))
   }
 
@@ -55,6 +56,7 @@ export class BattingStatsRepository {
         slg: Number(r.slg),
         ops: Number(r.ops),
         bb: r.bb,
+        hr: r.hr,
       })
       map.set(r.playerId, list)
     }
@@ -83,6 +85,7 @@ export class BattingStatsRepository {
           slg: new Prisma.Decimal(s.slg.toFixed(3)),
           ops: new Prisma.Decimal(s.ops.toFixed(3)),
           bb: s.bb,
+          hr: s.hr,
         },
         update: {
           teamName: s.teamName ?? "",
@@ -91,6 +94,7 @@ export class BattingStatsRepository {
           slg: new Prisma.Decimal(s.slg.toFixed(3)),
           ops: new Prisma.Decimal(s.ops.toFixed(3)),
           bb: s.bb,
+          hr: s.hr,
         },
       })
     }

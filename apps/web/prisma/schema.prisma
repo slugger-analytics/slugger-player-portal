@@ -84,6 +84,7 @@ model BattingStat {
   slg      Decimal @db.Decimal(5, 3)
   ops      Decimal @db.Decimal(5, 3)
   bb       Int     @default(0)
+  hr       Int     @default(0)
 
   player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
 

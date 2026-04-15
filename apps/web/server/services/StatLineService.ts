@@ -5,15 +5,20 @@
  * **Purpose:** Keep API responses consistent when summarizing cards (`PlayerSummary`)
  * and when filling `PlayerProfile` “most recent” / “previous” season slots.
  *
- * **Usage:** Used by `PlayerDataService` only. Batting lines use AVG/OBP/SLG; pitching
- * uses ERA/WHIP/K from the most recent season row after sorting by `season` desc.
+ * **Usage:** Used by `PlayerDataService` only. Batting lines use AVG/OBP/SLG/HR; pitching
+ * uses ERA/WHIP/K/IP from the most recent season row after sorting by `season` desc.
  */
 
 import type { BattingStats, PitchingStats } from "../types/models"
 
+function formatPitchingIp(ip: number): string {
+  if (!Number.isFinite(ip)) return "—"
+  return ip.toFixed(1).replace(/\.0$/, "")
+}
+
 export class StatLineService {
   /**
-   * Compact line for list cards: batters `"AVG / OBP / SLG"`, pitchers `"ERA / WHIP / K"`.
+   * Compact line for list cards, e.g. `AVG: 0.300 | OBP: 0.350 | …` or `ERA: 3.50 | WHIP: …`.
    * Uses the **latest** season row (by `season` descending).
    */
   generateMinimalStatLine(stats: BattingStats[] | PitchingStats[]): string {
@@ -22,10 +27,10 @@ export class StatLineService {
     const first = sorted[0]
     if ("ops" in first && "avg" in first) {
       const b = first as BattingStats
-      return [b.avg, b.obp, b.slg].map((n) => n.toFixed(3)).join(" / ")
+      return `AVG: ${b.avg.toFixed(3)} | OBP: ${b.obp.toFixed(3)} | SLG: ${b.slg.toFixed(3)} | HR: ${b.hr}`
     }
     const p = first as PitchingStats
-    return `${p.era.toFixed(2)} / ${p.whip.toFixed(2)} / ${p.k}`
+    return `ERA: ${p.era.toFixed(2)} | WHIP: ${p.whip.toFixed(2)} | K: ${p.k} | IP: ${formatPitchingIp(p.ip)}`
   }
 
   /** Highest `season` value in the array, or null if empty. */

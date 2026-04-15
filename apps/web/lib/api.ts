@@ -78,10 +78,11 @@ export async function fetchPlayerSummaryForCard(id: string): Promise<PlayerSumma
   let minimalStatLine = "—"
   if (profile.mostRecentBatting) {
     const b = profile.mostRecentBatting
-    minimalStatLine = `AVG ${Number(b.avg).toFixed(3)} · OPS ${Number(b.ops).toFixed(3)}`
+    minimalStatLine = `AVG: ${Number(b.avg).toFixed(3)} | OBP: ${Number(b.obp).toFixed(3)} | SLG: ${Number(b.slg).toFixed(3)} | HR: ${b.hr}`
   } else if (profile.mostRecentPitching) {
     const pit = profile.mostRecentPitching
-    minimalStatLine = `ERA ${Number(pit.era).toFixed(2)} · WHIP ${Number(pit.whip).toFixed(2)}`
+    const ipStr = Number.isFinite(pit.ip) ? pit.ip.toFixed(1).replace(/\.0$/, "") : "—"
+    minimalStatLine = `ERA: ${Number(pit.era).toFixed(2)} | WHIP: ${Number(pit.whip).toFixed(2)} | K: ${pit.k} | IP: ${ipStr}`
   }
   return {
     id: p.id,

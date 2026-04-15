@@ -255,6 +255,7 @@ export class DataParser {
       const slg = parseFloat(String(r.slg ?? r.Slg ?? "0"))
       const ops = parseFloat(String(r.ops ?? r.OPS ?? "0"))
       const bb = parseInt(String(r.bb ?? r.BB ?? "0"), 10)
+      const hr = parseInt(String(r.hr ?? r.HR ?? "0"), 10)
       out.push({
         playerId,
         season: year,
@@ -264,6 +265,7 @@ export class DataParser {
         slg: Number.isFinite(slg) ? slg : 0,
         ops: Number.isFinite(ops) ? ops : 0,
         bb: Number.isFinite(bb) ? bb : 0,
+        hr: Number.isFinite(hr) ? hr : 0,
       })
     }
     return out

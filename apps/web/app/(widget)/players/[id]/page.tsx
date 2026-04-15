@@ -154,6 +154,7 @@ function BattingTable({
             <th className="px-3 py-2">OBP</th>
             <th className="px-3 py-2">SLG</th>
             <th className="px-3 py-2">OPS</th>
+            <th className="px-3 py-2">HR</th>
             <th className="px-3 py-2">BB</th>
           </tr>
         </thead>
@@ -195,6 +196,7 @@ function BattingRow({
       <td className="px-3 py-2">{row ? row.obp.toFixed(3) : "—"}</td>
       <td className="px-3 py-2">{row ? row.slg.toFixed(3) : "—"}</td>
       <td className="px-3 py-2">{row ? row.ops.toFixed(3) : "—"}</td>
+      <td className="px-3 py-2">{row ? row.hr : "—"}</td>
       <td className="px-3 py-2">{row ? row.bb : "—"}</td>
     </tr>
   )
@@ -219,7 +221,7 @@ function PitchingTable({
             <th className="px-3 py-2">ERA</th>
             <th className="px-3 py-2">WHIP</th>
             <th className="px-3 py-2">IP</th>
-            <th className="px-3 py-2">SO</th>
+            <th className="px-3 py-2">K</th>
             <th className="px-3 py-2">BB</th>
           </tr>
         </thead>
