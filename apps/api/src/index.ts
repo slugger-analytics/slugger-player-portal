@@ -21,7 +21,10 @@ import { config } from "./config"
 import { prisma } from "./lib/prisma"
 
 const app = express()
-app.use(cors({ origin: true }))
+// In production, CORS_ALLOWED_ORIGIN is set to the ALB domain (e.g. https://alpb-analytics.com).
+// In local dev the variable is unset, so 'true' is used (allow all origins — same as before).
+const corsOrigin: string | boolean = process.env.CORS_ALLOWED_ORIGIN || true
+app.use(cors({ origin: corsOrigin }))
 app.use(express.json())
 
 /** Liveness/readiness probe for Docker or process managers. */

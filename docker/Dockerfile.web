@@ -1,2 +1,73 @@
-# TODO
+# Next.js web image for AWS Lambda (arm64)
+# Serves: player-portal-web Lambda behind the slugger-alb at /widgets/player-portal/*
+#
+# Build context: monorepo root (not apps/web)
+# Usage: docker buildx build --platform linux/arm64 \
+#          --build-arg NEXT_PUBLIC_API_URL=https://alpb-analytics.com/widgets/player-portal/api \
+#          -f docker/Dockerfile.web -t player-portal-web:latest .
+#
+# NEXT_PUBLIC_* vars are baked into the client bundle at build time — they MUST be
+# passed as --build-arg, not set as Lambda environment variables.
 
+# ─── Stage 1: Install deps and build ─────────────────────────────────────────
+FROM --platform=linux/arm64 node:22-alpine AS builder
+WORKDIR /app
+
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
+
+# Compile-time public vars baked into the browser bundle
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_BASE_PATH=/widgets/player-portal
+
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_BASE_PATH=$NEXT_PUBLIC_BASE_PATH
+
+# Copy workspace manifests first for layer caching
+COPY package.json package-lock.json ./
+COPY apps/web/package.json ./apps/web/
+COPY packages/shared/package.json ./packages/shared/
+
+RUN npm ci
+
+# Copy source
+COPY packages/shared/ ./packages/shared/
+COPY apps/web/ ./apps/web/
+
+# Build shared package first (runtime exports needed by SSR)
+RUN npm run build -w @available-player-portal/shared
+
+# Build Next.js — produces apps/web/.next/standalone because next.config.ts sets output: 'standalone'
+RUN npm run build -w @available-player-portal/web
+
+# ─── Stage 2: Lambda Web Adapter binary ──────────────────────────────────────
+FROM --platform=linux/arm64 public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 AS lwa
+
+# ─── Stage 3: Production image ────────────────────────────────────────────────
+FROM --platform=linux/arm64 node:22-alpine AS runner
+WORKDIR /app
+
+COPY --from=lwa /lambda-adapter /opt/extensions/lambda-adapter
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1
+
+# Copy the standalone server bundle.
+# Next.js standalone with outputFileTracingRoot set to the monorepo root produces
+# a server.js at the root of the standalone directory — verify after first build with:
+#   docker run --rm player-portal-web:latest ls /app
+COPY --from=builder /app/apps/web/.next/standalone ./
+
+# Static assets must be copied separately alongside the standalone server
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
+
+ENV PORT=8080
+EXPOSE 8080
+
+# server.js is placed at the root of the standalone output by Next.js.
+# If running from /app and server.js is inside apps/web/, adjust this to:
+#   CMD ["node", "apps/web/server.js"]
+CMD ["node", "server.js"]
