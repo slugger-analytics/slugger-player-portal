@@ -67,7 +67,5 @@ COPY --from=builder /app/apps/web/public ./apps/web/public
 ENV PORT=8080
 EXPOSE 8080
 
-# server.js is placed at the root of the standalone output by Next.js.
-# If running from /app and server.js is inside apps/web/, adjust this to:
-#   CMD ["node", "apps/web/server.js"]
-CMD ["node", "server.js"]
+# With outputFileTracingRoot at monorepo root, server.js is under apps/web/
+CMD ["node", "apps/web/server.js"]

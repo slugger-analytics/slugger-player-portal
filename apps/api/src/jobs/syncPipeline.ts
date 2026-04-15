@@ -95,16 +95,21 @@ export async function runSyncPipeline(): Promise<SyncPipelineResult> {
     parser.parsePlayersFromPitchingFeed(pitRaw),
   ]).filter(isPlayerDiscoveryEligible)
 
+  const eligibleIds = new Set(playerList.map((p) => p.id))
+  const filteredTx = parsedTx.filter((t) => eligibleIds.has(t.playerId))
+  const filteredBat = parsedBat.filter((b) => eligibleIds.has(b.playerId))
+  const filteredPit = parsedPit.filter((p) => eligibleIds.has(p.playerId))
+
   await players.upsertPlayers(playerList)
-  await txs.upsertTransactions(parsedTx)
-  await batting.upsertStats(parsedBat)
-  await pitching.upsertStats(parsedPit)
+  await txs.upsertTransactions(filteredTx)
+  await batting.upsertStats(filteredBat)
+  await pitching.upsertStats(filteredPit)
 
   const result: SyncPipelineResult = {
     players: playerList.length,
-    transactions: parsedTx.length,
-    batting: parsedBat.length,
-    pitching: parsedPit.length,
+    transactions: filteredTx.length,
+    batting: filteredBat.length,
+    pitching: filteredPit.length,
   }
 
   // eslint-disable-next-line no-console

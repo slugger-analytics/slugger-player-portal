@@ -27,13 +27,19 @@ const corsOrigin: string | boolean = process.env.CORS_ALLOWED_ORIGIN || true
 app.use(cors({ origin: corsOrigin }))
 app.use(express.json())
 
+// ALB forwards the full path (e.g. /widgets/player-portal/api/health).
+// In production BASE_PATH is set; locally it's empty so routes stay at /.
+const base = process.env.BASE_PATH
+  ? `${process.env.BASE_PATH}/api`
+  : ""
+
 /** Liveness/readiness probe for Docker or process managers. */
-app.get("/health", (_req, res) => {
+app.get(`${base}/health`, (_req, res) => {
   res.json({ ok: true })
 })
 
-app.use("/players", createPlayerRouter())
-app.use("/sync", createSyncRouter())
+app.use(`${base}/players`, createPlayerRouter())
+app.use(`${base}/sync`, createSyncRouter())
 
 /** Last-resort JSON error handler for route failures and unexpected errors. */
 app.use(

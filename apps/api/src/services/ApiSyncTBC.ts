@@ -1,6 +1,6 @@
 /**
  * @file ApiSyncTBC.ts
- * @description Data ingestion layer for The Baseball Cube (TBC) “JHU” CSV feeds.
+ * @description Data ingestion layer for The Baseball Cube (TBC) "JHU" CSV feeds.
  *
  * **Purpose:** Fetch raw text responses from the three feed endpoints (transactions,
  * batting, pitching). All network I/O to thebaseballcube.com runs **only on the server**
@@ -10,9 +10,11 @@
  * call `fetchTransactions()`, `fetchBattingStats()`, or `fetchPitchingStats()`. The
  * returned strings are passed to `RawDataStorage` and `DataParser` in `syncPipeline.ts`.
  *
- * **Note:** Spec URLs use `http://`; production traffic redirects to HTTPS, so this
- * module uses HTTPS directly to avoid extra redirects.
+ * **Note:** Uses Node.js `https` module (HTTP/1.1) rather than `fetch` (HTTP/2 via undici)
+ * to avoid Cloudflare bot-detection that blocks undici's TLS fingerprint from cloud IPs.
  */
+
+import https from "https"
 
 const TBC_BASE = "https://thebaseballcube.com/data/feed/jhu"
 
@@ -20,6 +22,52 @@ const TBC_BASE = "https://thebaseballcube.com/data/feed/jhu"
 function buildUrl(path: string, password: string): string {
   const enc = encodeURIComponent(password)
   return `${TBC_BASE}/${path}?pw=${enc}`
+}
+
+/** HTTP/1.1 GET via Node.js https module, following up to 5 redirects. */
+function httpsGet(url: string, redirectsLeft = 5): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const req = https.get(
+      url,
+      {
+        headers: {
+          Accept: "text/plain,text/html,*/*",
+          "User-Agent": "curl/8.7.1",
+        },
+        timeout: 180_000,
+      },
+      (res) => {
+        if (
+          res.statusCode &&
+          res.statusCode >= 300 &&
+          res.statusCode < 400 &&
+          res.headers.location
+        ) {
+          if (redirectsLeft <= 0) {
+            reject(new Error(`Too many redirects for ${url}`))
+            return
+          }
+          res.resume()
+          httpsGet(res.headers.location, redirectsLeft - 1).then(resolve, reject)
+          return
+        }
+        if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`GET ${url} failed: ${res.statusCode} ${res.statusMessage}`))
+          res.resume()
+          return
+        }
+        const chunks: Buffer[] = []
+        res.on("data", (chunk: Buffer) => chunks.push(chunk))
+        res.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")))
+        res.on("error", reject)
+      },
+    )
+    req.on("timeout", () => {
+      req.destroy()
+      reject(new Error(`GET ${url} timed out`))
+    })
+    req.on("error", reject)
+  })
 }
 
 /**
@@ -30,15 +78,7 @@ export class ApiSyncTBC {
 
   /** Low-level GET returning response body as plain text (feeds are CSV-in-HTML). */
   async GET(url: string): Promise<string> {
-    const res = await fetch(url, {
-      headers: { Accept: "text/plain,text/html,*/*" },
-      redirect: "follow",
-      signal: AbortSignal.timeout(180_000),
-    })
-    if (!res.ok) {
-      throw new Error(`GET ${url} failed: ${res.status} ${res.statusText}`)
-    }
-    return res.text()
+    return httpsGet(url)
   }
 
   /** Transaction rows feed (`tranx.asp`). */

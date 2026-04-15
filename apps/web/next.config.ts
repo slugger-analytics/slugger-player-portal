@@ -18,11 +18,9 @@ const nextConfig: NextConfig = {
       { protocol: "http", hostname: "**" },
     ],
   },
-  experimental: {
-    // Trace file dependencies from the monorepo root so packages/shared/ is
-    // included in the standalone bundle when building inside Docker
-    outputFileTracingRoot: path.join(__dirname, "../../"),
-  },
+  // Trace file dependencies from the monorepo root so packages/shared/ is
+  // included in the standalone bundle when building inside Docker
+  outputFileTracingRoot: path.join(__dirname, "../../"),
   async headers() {
     return [
       {
@@ -33,7 +31,7 @@ const nextConfig: NextConfig = {
             // Both are served from the same domain (alpb-analytics.com via the ALB)
             // so 'self' is sufficient. Extend this list if other origins need access.
             key: "Content-Security-Policy",
-            value: "frame-ancestors 'self' https://alpb-analytics.com",
+            value: "frame-ancestors 'self' https://alpb-analytics.com https://www.alpb-analytics.com",
           },
           {
             key: "X-Frame-Options",

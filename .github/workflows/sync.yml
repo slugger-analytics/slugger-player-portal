@@ -1,0 +1,33 @@
+name: Sync TBC Data
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: Fetch TBC feeds and sync to Aurora
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build shared package
+        run: npm run build -w @available-player-portal/shared
+
+      - name: Run sync pipeline
+        working-directory: apps/api
+        env:
+          DATABASE_URL: ${{ secrets.PLAYER_PORTAL_DATABASE_URL }}
+          TBC_FEED_PASSWORD: ${{ secrets.TBC_FEED_PASSWORD }}
+        run: npx tsx src/jobs/syncPipeline.ts
