@@ -136,7 +136,8 @@ export class TransactionRepository {
   /**
    * 1) Delete transactions before {@link PORTAL_TRANSACTION_MIN_DATE}.
    * 2) Recompute {@link Player.hasProfileVisibleTransaction} for every player.
-   * 3) Delete players with no profile-visible transactions (cascades stats + remaining transactions).
+   * 3) Delete players with no profile-visible transactions OR discovery_eligible=false
+   *    (cascades stats + remaining transactions).
    * Call after sync upserts so the portal only retains 2025+ transaction history for eligibility.
    */
   async enforcePortalTransactionRetentionPolicy(): Promise<void> {
@@ -154,7 +155,10 @@ export class TransactionRepository {
         )
       )
     `
-    await prisma.$executeRaw`DELETE FROM "Player" WHERE has_profile_visible_transaction = false`
+    await prisma.$executeRaw`
+      DELETE FROM "Player"
+      WHERE has_profile_visible_transaction = false OR discovery_eligible = false
+    `
   }
 
   /**

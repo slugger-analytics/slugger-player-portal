@@ -7,7 +7,7 @@
  */
 
 import Link from "next/link"
-import type { PlayerSummary } from "@available-player-portal/shared"
+import { experienceLevelDisplayLabel, type PlayerSummary } from "@available-player-portal/shared"
 import { PlayerAvatarPlaceholder } from "@/components/discovery/PlayerAvatarPlaceholder"
 import { FavoriteHeartButton } from "@/components/favorites/FavoriteHeartButton"
 import { PlayerUpdatesBellButton } from "@/components/updates/PlayerUpdatesBellButton"
@@ -31,7 +31,8 @@ export function PlayerCard({ player, className = "", onBeforeNavigate }: Props) 
         dateStyle: "medium",
       })
     : "—"
-  const statLabels = isPitcherPosition(player.position) ? "ERA / WHIP / K" : "AVG / OBP / SLG"
+  const statLabels = isPitcherPosition(player.position) ? "ERA / WHIP / SO" : "AVG / OBP / SLG"
+  const maxLevel = experienceLevelDisplayLabel(player.experienceLevel)
 
   return (
     <Link
@@ -50,6 +51,7 @@ export function PlayerCard({ player, className = "", onBeforeNavigate }: Props) 
         </div>
         <div className="mt-1 break-words text-xs font-medium text-neutral-600 dark:text-neutral-400">{player.position}</div>
         <div className="break-words text-xs text-neutral-500 dark:text-neutral-500">{player.team}</div>
+        <div className="mt-0.5 break-words text-xs text-neutral-500 dark:text-neutral-500">Max level: {maxLevel}</div>
         <div className="mt-1.5 break-words font-mono text-[11px] leading-snug text-neutral-800 dark:text-neutral-300">
           <span className="font-semibold text-neutral-600 dark:text-neutral-400">{statLabels}: </span>
           {player.minimalStatLine}

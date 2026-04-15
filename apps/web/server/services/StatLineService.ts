@@ -32,9 +32,7 @@ export class StatLineService {
   selectMostRecentSeason(
     stats: BattingStats[] | PitchingStats[],
   ): BattingStats | PitchingStats | null {
-    if (!stats.length) return null
-    const sorted = [...stats].sort((a, b) => b.season - a.season)
-    return sorted[0] ?? null
+    return this.selectMostRecentSeasonRows(stats)[0] ?? null
   }
 
   /** Second-highest `season` (e.g. prior year), or null if fewer than two seasons. */
@@ -43,7 +41,19 @@ export class StatLineService {
   ): BattingStats | PitchingStats | null {
     if (stats.length < 2) return null
     const sorted = [...stats].sort((a, b) => b.season - a.season)
-    return sorted[1] ?? null
+    const mostRecentSeason = sorted[0]?.season
+    const previous = sorted.find((s) => s.season < (mostRecentSeason ?? Number.POSITIVE_INFINITY))
+    return previous ?? null
+  }
+
+  /** All rows for the latest season (for multi-team same-year entries). */
+  selectMostRecentSeasonRows(
+    stats: BattingStats[] | PitchingStats[],
+  ): Array<BattingStats | PitchingStats> {
+    if (!stats.length) return []
+    const sorted = [...stats].sort((a, b) => b.season - a.season)
+    const mostRecentSeason = sorted[0]!.season
+    return sorted.filter((s) => s.season === mostRecentSeason)
   }
 }
 

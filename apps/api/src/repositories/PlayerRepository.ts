@@ -10,7 +10,12 @@
  * directly; keep HTTP layer thin).
  */
 
-import { isExperienceLevelCode, isLastTransactionDaysOption } from "@available-player-portal/shared"
+import {
+  experienceLevelsAtOrAbove,
+  experienceLevelsAtOrBelow,
+  isExperienceLevelCode,
+  isLastTransactionDaysOption,
+} from "@available-player-portal/shared"
 import type { BatHand as PrismaBatHand, ExperienceLevel, ThrowHand as PrismaThrowHand } from "@prisma/client"
 import { Prisma } from "@prisma/client"
 import type { Player, PlayerFilters } from "../types/models"
@@ -56,12 +61,33 @@ export class PlayerRepository {
       if (filters.ageMax != null) age.lte = filters.ageMax
       clauses.push({ age })
     }
-    if (filters.experienceLevel != null && filters.experienceLevel !== "") {
-      const code = filters.experienceLevel
-      if (!isExperienceLevelCode(code)) {
-        throw new Error(`Invalid experienceLevel: ${code}`)
+    const maxCode = filters.experienceLevel?.trim()
+    const minCode = filters.experienceLevelMin?.trim()
+    if (maxCode) {
+      if (!isExperienceLevelCode(maxCode)) throw new Error(`Invalid experienceLevel: ${maxCode}`)
+    }
+    if (minCode) {
+      if (!isExperienceLevelCode(minCode)) throw new Error(`Invalid experienceLevelMin: ${minCode}`)
+    }
+    if (maxCode || minCode) {
+      const above = minCode ? new Set(experienceLevelsAtOrAbove(minCode)) : null
+      const below = maxCode ? new Set(experienceLevelsAtOrBelow(maxCode)) : null
+      const allowed = ((): ExperienceLevel[] => {
+        const all = ["ROOKIE", "A", "A_PLUS", "AA", "AAA", "MLB"] as const
+        const out: ExperienceLevel[] = []
+        for (const c of all) {
+          if (above && !above.has(c)) continue
+          if (below && !below.has(c)) continue
+          out.push(c as ExperienceLevel)
+        }
+        return out
+      })()
+      if (allowed.length) {
+        clauses.push({ experienceLevel: { in: allowed } })
+      } else {
+        // Impossible range → return empty result set.
+        clauses.push({ id: { equals: "__no_match__" } })
       }
-      clauses.push({ experienceLevel: code as ExperienceLevel })
     }
     if (filters.hasStats) {
       clauses.push({

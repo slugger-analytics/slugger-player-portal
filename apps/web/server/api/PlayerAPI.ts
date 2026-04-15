@@ -107,10 +107,14 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     }
   }
 
-  const { value: experienceLevel, invalidRaw: exactInvalid } = parseExactExperienceLevelQuery(query)
+  const { value: experienceLevel, invalidRaw: exactInvalid } = parseMaxExperienceLevelQuery(query)
 
   if (exactInvalid) {
     throw new Error(`Invalid experienceLevel: ${exactInvalid}`)
+  }
+  const { value: experienceLevelMin, invalidRaw: minInvalid } = parseMinExperienceLevelQuery(query)
+  if (minInvalid) {
+    throw new Error(`Invalid experienceLevelMin: ${minInvalid}`)
   }
 
   let sortBy: PlayerFilters["sortBy"]
@@ -181,6 +185,7 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     ageMin,
     ageMax,
     experienceLevel,
+    experienceLevelMin,
     hasStats,
     limit,
     offset,
@@ -193,12 +198,27 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
   }
 }
 
-function parseExactExperienceLevelQuery(query: Record<string, unknown>): {
+function parseMaxExperienceLevelQuery(query: Record<string, unknown>): {
   value: string | undefined
   invalidRaw: string | undefined
 } {
   // Same filter; multiple keys for HTTP clients (camelCase, snake_case, TBC-style).
-  const keys = ["experienceLevel", "experience_level", "highlevel", "highLevel"] as const
+  const keys = ["experienceLevel", "experience_level", "highlevel", "highLevel", "experienceLevelMax"] as const
+  for (const key of keys) {
+    const raw = firstString(query[key])
+    if (raw == null || raw.trim() === "") continue
+    const parsed = parseExperienceLevelFilterInput(raw)
+    if (parsed) return { value: parsed, invalidRaw: undefined }
+    return { value: undefined, invalidRaw: raw }
+  }
+  return { value: undefined, invalidRaw: undefined }
+}
+
+function parseMinExperienceLevelQuery(query: Record<string, unknown>): {
+  value: string | undefined
+  invalidRaw: string | undefined
+} {
+  const keys = ["experienceLevelMin", "experience_level_min", "minExperienceLevel", "minlevel", "min_level"] as const
   for (const key of keys) {
     const raw = firstString(query[key])
     if (raw == null || raw.trim() === "") continue

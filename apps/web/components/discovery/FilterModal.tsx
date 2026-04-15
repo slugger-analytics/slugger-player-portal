@@ -28,7 +28,9 @@ export function FilterModal({
   const initial =
     state.mode === "edit" ? state.filter : defaultUiFilterForPreset(state.presetKind ?? "position")
 
-  const [kind, setKind] = useState<FilterKind>(initial.kind)
+  const [kind, setKind] = useState<FilterKind>(
+    initial.kind === "experienceLevelMin" ? "experienceLevel" : initial.kind,
+  )
   const [position, setPosition] = useState(initial.kind === "position" ? (initial.rawValue ?? "") : "")
   const [team, setTeam] = useState(initial.kind === "team" ? (initial.rawValue ?? "") : "")
   const [status, setStatus] = useState(initial.kind === "status" ? (initial.rawValue ?? "") : "")
@@ -37,7 +39,16 @@ export function FilterModal({
     initial.kind === "age" && initial.ageValue != null ? String(initial.ageValue) : "",
   )
   const [expMax, setExpMax] = useState(
-    initial.kind === "experienceLevel" ? (initial.rawValue ?? "") : "",
+    initial.kind === "experienceLevel"
+      ? (initial.experienceLevelMaxRaw ?? initial.rawValue ?? "")
+      : "",
+  )
+  const [expMin, setExpMin] = useState(
+    initial.kind === "experienceLevel"
+      ? (initial.experienceLevelMinRaw ?? "")
+      : initial.kind === "experienceLevelMin"
+        ? (initial.rawValue ?? "")
+        : "",
   )
   const [lastTxDays, setLastTxDays] = useState(
     initial.kind === "lastTransactionDays" ? (initial.rawValue ?? "") : "",
@@ -66,16 +77,27 @@ export function FilterModal({
       return { id, kind, label: `Status: ${s}`, rawValue: s }
     }
     if (kind === "experienceLevel") {
-      const v = expMax.trim()
-      if (!v) return { id, kind, label: "Max experience level: Select", rawValue: "" }
-      const opt = EXPERIENCE_LEVEL_OPTIONS.find((o) => o.code === v)
+      const min = expMin.trim()
+      const max = expMax.trim()
+      if (!min && !max) return { id, kind, label: "Experience level: Select range", rawValue: "" }
+      const minOpt = min ? EXPERIENCE_LEVEL_OPTIONS.find((o) => o.code === min) : undefined
+      const maxOpt = max ? EXPERIENCE_LEVEL_OPTIONS.find((o) => o.code === max) : undefined
+      const label =
+        min && max
+          ? `Experience level: ${minOpt?.label ?? min} to ${maxOpt?.label ?? max}`
+          : min
+            ? `Experience level: ${minOpt?.label ?? min}+`
+            : `Experience level: Up to ${maxOpt?.label ?? max}`
       return {
         id,
         kind,
-        label: `Max experience level: ${opt?.label ?? v}`,
-        rawValue: v,
+        label,
+        rawValue: max,
+        experienceLevelMinRaw: min || undefined,
+        experienceLevelMaxRaw: max || undefined,
       }
     }
+    if (kind === "experienceLevelMin") return { id, kind: "experienceLevel", label: "Experience level: Select range" }
     if (kind === "lastTransactionDays") {
       const v = lastTxDays.trim()
       if (!v) return { id, kind, label: "Last X days: Select", rawValue: "" }
@@ -119,7 +141,8 @@ export function FilterModal({
     if (kind === "position") return position.trim() !== ""
     if (kind === "team") return team.trim() !== ""
     if (kind === "status") return status.trim() !== ""
-    if (kind === "experienceLevel") return expMax.trim() !== ""
+    if (kind === "experienceLevel") return expMin.trim() !== "" || expMax.trim() !== ""
+    if (kind === "experienceLevelMin") return expMin.trim() !== "" || expMax.trim() !== ""
     if (kind === "lastTransactionDays") return lastTxDays.trim() !== ""
     if (kind === "handedness") {
       const b = batHand.trim()
@@ -217,26 +240,38 @@ export function FilterModal({
           ) : null}
 
           {kind === "experienceLevel" ? (
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-              Max experience level
-              <select
-                className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
-                value={expMax}
-                onChange={(e) => setExpMax(e.target.value)}
-              >
-                <option value="" disabled hidden>
-                  Select
-                </option>
-                {EXPERIENCE_LEVEL_OPTIONS.map((o) => (
-                  <option key={o.code} value={o.code}>
-                    {o.label}
-                  </option>
-                ))}
-                {expMax && !EXPERIENCE_LEVEL_OPTIONS.some((o) => o.code === expMax) ? (
-                  <option value={expMax}>{expMax}</option>
-                ) : null}
-              </select>
-            </label>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                Min experience level
+                <select
+                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                  value={expMin}
+                  onChange={(e) => setExpMin(e.target.value)}
+                >
+                  <option value="">Any</option>
+                  {EXPERIENCE_LEVEL_OPTIONS.map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                Max experience level
+                <select
+                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                  value={expMax}
+                  onChange={(e) => setExpMax(e.target.value)}
+                >
+                  <option value="">Any</option>
+                  {EXPERIENCE_LEVEL_OPTIONS.map((o) => (
+                    <option key={o.code} value={o.code}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           ) : null}
 
           {kind === "lastTransactionDays" ? (

@@ -185,8 +185,10 @@ export class PlayerDataService {
     ])
     return {
       player,
+      mostRecentBattingRows: this.statLine.selectMostRecentSeasonRows(battingStats) as BattingStats[],
       mostRecentBatting: this.statLine.selectMostRecentSeason(battingStats) as BattingStats | null,
       previousBatting: this.statLine.selectPreviousSeason(battingStats) as BattingStats | null,
+      mostRecentPitchingRows: this.statLine.selectMostRecentSeasonRows(pitchingStats) as PitchingStats[],
       mostRecentPitching: this.statLine.selectMostRecentSeason(pitchingStats) as PitchingStats | null,
       previousPitching: this.statLine.selectPreviousSeason(pitchingStats) as PitchingStats | null,
       transactions: txs,
