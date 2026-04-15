@@ -12,7 +12,7 @@ env:
   WEB_ECR_REPO: player-portal-web
   # Compile-time public URL baked into the Next.js client bundle.
   # Must match the ALB path for the API Lambda.
-  NEXT_PUBLIC_API_URL: https://alpb-analytics.com/widgets/player-portal/api
+  NEXT_PUBLIC_API_URL: https://www.alpb-analytics.com/widgets/player-portal/api
   NEXT_PUBLIC_BASE_PATH: /widgets/player-portal
   IMAGE_TAG: ${{ github.sha }}
 
@@ -105,5 +105,5 @@ jobs:
         run: |
           sleep 5
           curl --fail --silent --show-error \
-            "https://alpb-analytics.com/widgets/player-portal/api/health"
+            "https://www.alpb-analytics.com/widgets/player-portal/api/health"
           echo "API health check passed."
