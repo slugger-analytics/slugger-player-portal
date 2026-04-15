@@ -104,6 +104,6 @@ jobs:
       - name: Smoke test API health endpoint
         run: |
           sleep 5
-          curl --fail --silent --show-error \
+          curl --http1.1 --fail --silent --show-error \
             "https://www.alpb-analytics.com/widgets/player-portal/api/health"
           echo "API health check passed."
