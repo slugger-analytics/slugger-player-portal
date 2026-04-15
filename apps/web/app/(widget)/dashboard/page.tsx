@@ -10,6 +10,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { RefreshCw } from "lucide-react"
 import { PlayerCard } from "@/components/discovery/PlayerCard"
 import { PreferenceFiltersPanel } from "@/components/discovery/PreferenceFiltersPanel"
+import { POSITION_FILTER_OPTIONS } from "@/components/discovery/DiscoveryFilterTypes"
 import type { UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
 import { fetchPlayerSummaries } from "@/lib/api"
 import { withBasePath } from "@/lib/base-path"
@@ -23,7 +24,8 @@ import {
   takeDiscoverySnapshot,
 } from "@/lib/discovery-session"
 import { loadProfiles, type PlayerSearchProfile } from "@/lib/player-profiles"
-import type { PlayerSummary } from "@available-player-portal/shared"
+import type { PlayerSummary, RankingPreferences } from "@available-player-portal/shared"
+import { upsertProfile } from "@/lib/player-profiles"
 
 const DISCOVERY_HOME_PAGE_SIZE = 8
 
@@ -41,6 +43,59 @@ function dedupePlayersById(players: PlayerSummary[]): PlayerSummary[] {
 
 type SearchMode = "custom" | "profile"
 
+type RankingDraft = {
+  performance: string
+  experience: string
+  positionMatch: string
+  availability: string
+  recentTransactions: string
+  targetPosition: string
+}
+
+const EMPTY_RANKING_DRAFT: RankingDraft = {
+  performance: "",
+  experience: "",
+  positionMatch: "",
+  availability: "",
+  recentTransactions: "",
+  targetPosition: "",
+}
+
+function rankingPreferencesToDraft(prefs?: RankingPreferences): RankingDraft {
+  if (!prefs) return { ...EMPTY_RANKING_DRAFT }
+  return {
+    performance: String(Math.round(prefs.weights.performance * 100)),
+    experience: String(Math.round(prefs.weights.experience * 100)),
+    positionMatch: String(Math.round(prefs.weights.positionMatch * 100)),
+    availability: String(Math.round(prefs.weights.availability * 100)),
+    recentTransactions: String(Math.round(prefs.weights.recentTransactions * 100)),
+    targetPosition: prefs.targetPosition ?? "",
+  }
+}
+
+function rankingDraftToPreferences(draft: RankingDraft): RankingPreferences | null {
+  const perf = Number(draft.performance)
+  const exp = Number(draft.experience)
+  const pos = Number(draft.positionMatch)
+  const avail = Number(draft.availability)
+  const tx = Number(draft.recentTransactions)
+  const nums = [perf, exp, pos, avail, tx]
+  if (nums.some((n) => !Number.isFinite(n) || n < 0 || n > 100)) return null
+  const total = perf + exp + pos + avail + tx
+  if (Math.abs(total - 100) >= 0.00001) return null
+  if (!draft.targetPosition.trim()) return null
+  return {
+    weights: {
+      performance: perf / 100,
+      experience: exp / 100,
+      positionMatch: pos / 100,
+      availability: avail / 100,
+      recentTransactions: tx / 100,
+    },
+    targetPosition: draft.targetPosition.trim(),
+  }
+}
+
 export default function PlayerDiscoveryHomePage() {
   const [searchMode, setSearchMode] = useState<SearchMode>("custom")
   const [customFilters, setCustomFilters] = useState<UiFilter[]>([])
@@ -48,12 +103,15 @@ export default function PlayerDiscoveryHomePage() {
   const [profiles, setProfiles] = useState<PlayerSearchProfile[]>([])
   const [selectedProfileId, setSelectedProfileId] = useState("")
   const [sort, setSort] = useState<DiscoverySortOption>("newestTransaction")
+  const [customRankingPreferences, setCustomRankingPreferences] = useState<RankingPreferences | undefined>(undefined)
   const [transactionTypes, setTransactionTypes] = useState<DiscoveryTransactionType[]>([
     "retired",
     "released",
     "freeAgent",
   ])
   const [transactionTypeModalOpen, setTransactionTypeModalOpen] = useState(false)
+  const [rankingModalOpen, setRankingModalOpen] = useState(false)
+  const [rankingDraft, setRankingDraft] = useState<RankingDraft>(EMPTY_RANKING_DRAFT)
   const [players, setPlayers] = useState<PlayerSummary[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -74,6 +132,7 @@ export default function PlayerDiscoveryHomePage() {
       setSelectedProfileId(snap.selectedProfileId)
       setSort(snap.sort)
       setTransactionTypes(snap.transactionTypes)
+      setCustomRankingPreferences(snap.customRankingPreferences)
     }
     setDiscoveryReady(true)
   }, [])
@@ -112,8 +171,18 @@ export default function PlayerDiscoveryHomePage() {
         customOnlyWithStats,
         sort,
         transactionTypes,
+        customRankingPreferences,
       ),
-    [searchMode, profiles, selectedProfileId, customFilters, customOnlyWithStats, sort, transactionTypes],
+    [
+      searchMode,
+      profiles,
+      selectedProfileId,
+      customFilters,
+      customOnlyWithStats,
+      sort,
+      transactionTypes,
+      customRankingPreferences,
+    ],
   )
 
   const filterParamsRef = useRef(filterParams)
@@ -134,6 +203,7 @@ export default function PlayerDiscoveryHomePage() {
       customOnlyWithStats,
       sort,
       transactionTypes,
+      customRankingPreferences,
     )
     fetchPlayerSummaries({
       ...params,
@@ -164,6 +234,7 @@ export default function PlayerDiscoveryHomePage() {
     customOnlyWithStats,
     sort,
     transactionTypes,
+    customRankingPreferences,
   ])
 
   /** After “Refresh database” sync: reload first page without blanking the grid (sync button already shows progress). */
@@ -248,6 +319,8 @@ export default function PlayerDiscoveryHomePage() {
   }
 
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId)
+  const hasRankingPreferencesConfigured =
+    searchMode === "profile" ? Boolean(selectedProfile?.rankingPreferences) : Boolean(customRankingPreferences)
 
   function saveDiscoverySnapshotBeforeProfile() {
     saveDiscoverySnapshotForPlayerNavigation({
@@ -257,8 +330,46 @@ export default function PlayerDiscoveryHomePage() {
       selectedProfileId,
       sort,
       transactionTypes,
+      customRankingPreferences,
     })
   }
+
+  function openRankingModal() {
+    const source = searchMode === "profile" ? selectedProfile?.rankingPreferences : customRankingPreferences
+    setRankingDraft(rankingPreferencesToDraft(source))
+    setRankingModalOpen(true)
+  }
+
+  function saveRankingPreferences() {
+    const parsed = rankingDraftToPreferences(rankingDraft)
+    if (!parsed) return
+    if (searchMode === "profile") {
+      const selected = profiles.find((p) => p.id === selectedProfileId)
+      if (selected) {
+        upsertProfile({
+          ...selected,
+          rankingPreferences: parsed,
+        })
+        refreshProfilesList()
+      }
+    } else {
+      setCustomRankingPreferences(parsed)
+    }
+    setSort("ranking")
+    setRankingModalOpen(false)
+  }
+
+  const rankingDraftNums = [
+    Number(rankingDraft.performance),
+    Number(rankingDraft.experience),
+    Number(rankingDraft.positionMatch),
+    Number(rankingDraft.availability),
+    Number(rankingDraft.recentTransactions),
+  ]
+  const rankingWeightTotal = rankingDraftNums.reduce((sum, n) => sum + (Number.isFinite(n) ? n : 0), 0)
+  const rankingWeightsValid =
+    rankingDraftNums.every((n) => Number.isFinite(n) && n >= 0 && n <= 100) && Math.abs(rankingWeightTotal - 100) < 0.00001
+  const rankingTargetPositionValid = Boolean(rankingDraft.targetPosition.trim())
 
   function toggleTransactionType(type: DiscoveryTransactionType) {
     setTransactionTypes((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]))
@@ -336,6 +447,10 @@ export default function PlayerDiscoveryHomePage() {
               value={sort}
               onChange={(e) => {
                 const next = e.target.value as DiscoverySortOption
+                if (next === "ranking" && !hasRankingPreferencesConfigured) {
+                  openRankingModal()
+                  return
+                }
                 setSort(next)
                 if (next === "transactionType") setTransactionTypeModalOpen(true)
               }}
@@ -344,8 +459,16 @@ export default function PlayerDiscoveryHomePage() {
               <option value="newestTransaction">Newest transactions (default)</option>
               <option value="lastName">Last name</option>
               <option value="transactionType">Transaction type</option>
+              <option value="ranking">Ranking score</option>
             </select>
           </label>
+          <button
+            type="button"
+            onClick={openRankingModal}
+            className="mb-3 rounded-portal-sm border border-portal-filter-border bg-portal-surface px-3 py-2 text-sm font-medium text-[#4A5F78] shadow-portal-card hover:border-portal-accent dark:text-portal-accent"
+          >
+            {hasRankingPreferencesConfigured ? "Ranking preferences: Set" : "Set ranking preferences"}
+          </button>
           {sort === "transactionType" ? (
             <button
               type="button"
@@ -542,6 +665,156 @@ export default function PlayerDiscoveryHomePage() {
                 className="rounded-portal-sm bg-portal-accent px-3 py-2 text-sm text-white"
               >
                 Done
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {rankingModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
+          <div className="w-full max-w-xl rounded-portal-sm border border-portal-filter-border bg-portal-surface p-4 shadow-portal">
+            <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+              Set ranking preferences
+            </h3>
+            <p className="mt-1 text-xs text-neutral-500">
+              Weights must add to 100%. Applies to {searchMode === "profile" ? "this saved profile" : "custom search"}.
+            </p>
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="text-sm text-neutral-700 dark:text-neutral-300">
+                Performance (%)
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={rankingDraft.performance}
+                  onChange={(e) =>
+                    setRankingDraft((prev) => ({
+                      ...prev,
+                      performance: e.target.value,
+                    }))
+                  }
+                  placeholder="eg 30"
+                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2 text-sm dark:border-neutral-600"
+                />
+              </label>
+              <label className="text-sm text-neutral-700 dark:text-neutral-300">
+                Experience (%)
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={rankingDraft.experience}
+                  onChange={(e) =>
+                    setRankingDraft((prev) => ({
+                      ...prev,
+                      experience: e.target.value,
+                    }))
+                  }
+                  placeholder="eg 20"
+                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2 text-sm dark:border-neutral-600"
+                />
+              </label>
+              <label className="text-sm text-neutral-700 dark:text-neutral-300">
+                Position match (%)
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={rankingDraft.positionMatch}
+                  onChange={(e) =>
+                    setRankingDraft((prev) => ({
+                      ...prev,
+                      positionMatch: e.target.value,
+                    }))
+                  }
+                  placeholder="eg 15"
+                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2 text-sm dark:border-neutral-600"
+                />
+              </label>
+              <label className="text-sm text-neutral-700 dark:text-neutral-300">
+                Availability (%)
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={rankingDraft.availability}
+                  onChange={(e) =>
+                    setRankingDraft((prev) => ({
+                      ...prev,
+                      availability: e.target.value,
+                    }))
+                  }
+                  placeholder="eg 15"
+                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2 text-sm dark:border-neutral-600"
+                />
+              </label>
+              <label className="text-sm text-neutral-700 dark:text-neutral-300">
+                Recent transactions (%)
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={rankingDraft.recentTransactions}
+                  onChange={(e) =>
+                    setRankingDraft((prev) => ({
+                      ...prev,
+                      recentTransactions: e.target.value,
+                    }))
+                  }
+                  placeholder="eg 20"
+                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2 text-sm dark:border-neutral-600"
+                />
+              </label>
+              <label className="text-sm text-neutral-700 dark:text-neutral-300">
+                Target position
+                <select
+                  value={rankingDraft.targetPosition}
+                  onChange={(e) =>
+                    setRankingDraft((prev) => ({
+                      ...prev,
+                      targetPosition: e.target.value,
+                    }))
+                  }
+                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2 text-sm dark:border-neutral-600"
+                >
+                  <option value="">Select position</option>
+                  {POSITION_FILTER_OPTIONS.map((pos) => (
+                    <option key={pos} value={pos}>
+                      {pos}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p
+              className={`mt-3 text-xs ${
+                rankingWeightsValid
+                  ? "text-neutral-500"
+                  : "text-red-600"
+              }`}
+            >
+              Total:{" "}
+              {rankingWeightTotal.toFixed(0)}
+              %
+            </p>
+            {!rankingTargetPositionValid ? (
+              <p className="mt-1 text-xs text-red-600">Please select a target position.</p>
+            ) : null}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRankingModalOpen(false)}
+                className="rounded-portal-sm border border-neutral-300 px-3 py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveRankingPreferences}
+                disabled={!rankingWeightsValid || !rankingTargetPositionValid}
+                className="rounded-portal-sm bg-portal-accent px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Save
               </button>
             </div>
           </div>

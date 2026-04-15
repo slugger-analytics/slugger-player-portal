@@ -34,6 +34,33 @@ export class BattingStatsRepository {
     }))
   }
 
+  async getStatsByPlayerIds(playerIds: string[]): Promise<Map<string, BattingStats[]>> {
+    if (playerIds.length === 0) return new Map()
+    const rows = await prisma.battingStat.findMany({
+      where: {
+        playerId: { in: playerIds },
+        NOT: { teamName: { contains: "|" } },
+      },
+      orderBy: [{ playerId: "asc" }, { season: "desc" }, { teamName: "desc" }],
+    })
+    const map = new Map<string, BattingStats[]>()
+    for (const r of rows) {
+      const list = map.get(r.playerId) ?? []
+      list.push({
+        playerId: r.playerId,
+        season: r.season,
+        teamName: r.teamName || null,
+        avg: Number(r.avg),
+        obp: Number(r.obp),
+        slg: Number(r.slg),
+        ops: Number(r.ops),
+        bb: r.bb,
+      })
+      map.set(r.playerId, list)
+    }
+    return map
+  }
+
   /** Batch upsert of parsed `BattingStats` rows (decimals stored as `Decimal(5,3)`). */
   async upsertStats(stats: BattingStats[]): Promise<void> {
     const byKey = new Map<string, BattingStats>()

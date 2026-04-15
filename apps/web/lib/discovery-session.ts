@@ -6,6 +6,7 @@
 
 import type { UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
 import type { DiscoverySortOption, DiscoveryTransactionType } from "@/lib/discovery-query"
+import type { RankingPreferences } from "@available-player-portal/shared"
 
 const SNAPSHOT_KEY = "portal-discovery-return-snapshot"
 
@@ -16,6 +17,7 @@ export type DiscoverySnapshot = {
   selectedProfileId: string
   sort: DiscoverySortOption
   transactionTypes: DiscoveryTransactionType[]
+  customRankingPreferences?: RankingPreferences
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -25,6 +27,15 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 function isUiFilter(v: unknown): v is UiFilter {
   if (!isRecord(v)) return false
   return typeof v.id === "string" && typeof v.kind === "string" && typeof v.label === "string"
+}
+
+function isRankingPreferences(v: unknown): v is RankingPreferences {
+  if (!isRecord(v)) return false
+  const w = v.weights
+  if (!isRecord(w)) return false
+  const nums = [w.performance, w.experience, w.positionMatch, w.availability, w.recentTransactions]
+  if (!nums.every((n) => typeof n === "number" && Number.isFinite(n))) return false
+  return v.targetPosition == null || typeof v.targetPosition === "string"
 }
 
 function parseSnapshot(raw: string): DiscoverySnapshot | null {
@@ -47,6 +58,8 @@ function parseSnapshot(raw: string): DiscoverySnapshot | null {
           ? "lastName"
           : sortRaw === "transactionType"
             ? "transactionType"
+            : sortRaw === "ranking"
+              ? "ranking"
             : (() => {
                 throw new Error("Invalid discovery sort")
               })()
@@ -64,6 +77,12 @@ function parseSnapshot(raw: string): DiscoverySnapshot | null {
     if (Array.isArray(ttRaw) && transactionTypes.length !== ttRaw.length) {
       throw new Error("Invalid transactionTypes")
     }
+    const customRankingPreferences = (() => {
+      const rp = parsed.customRankingPreferences
+      if (rp == null) return undefined
+      if (!isRankingPreferences(rp)) throw new Error("Invalid customRankingPreferences")
+      return rp
+    })()
     return {
       searchMode: sm,
       customFilters: cf,
@@ -71,6 +90,7 @@ function parseSnapshot(raw: string): DiscoverySnapshot | null {
       selectedProfileId: sp,
       sort,
       transactionTypes,
+      customRankingPreferences,
     }
   } catch {
     return null

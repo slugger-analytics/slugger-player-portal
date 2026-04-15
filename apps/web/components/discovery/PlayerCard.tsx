@@ -33,10 +33,15 @@ export function PlayerCard({ player, className = "", onBeforeNavigate }: Props) 
     : "—"
   const statLabels = isPitcherPosition(player.position) ? "ERA / WHIP / SO" : "AVG / OBP / SLG"
   const maxLevel = experienceLevelDisplayLabel(player.experienceLevel)
+  const rankScoreOutOf100 = player.rankScore != null ? Math.round(player.rankScore * 100) : null
+  const profileHref =
+    rankScoreOutOf100 != null
+      ? `/players/${encodeURIComponent(player.id)}?rankScore=${encodeURIComponent(String(rankScoreOutOf100))}`
+      : `/players/${encodeURIComponent(player.id)}`
 
   return (
     <Link
-      href={`/players/${encodeURIComponent(player.id)}`}
+      href={profileHref}
       onClick={() => onBeforeNavigate?.()}
       className={`group relative flex w-full min-w-0 shrink-0 items-start gap-3 rounded-portal border border-neutral-200/80 bg-portal-surface p-3 shadow-portal-card transition hover:border-portal-filter-border hover:shadow-portal dark:border-neutral-600/50 ${className}`}
     >
@@ -59,6 +64,12 @@ export function PlayerCard({ player, className = "", onBeforeNavigate }: Props) 
         <div className="mt-1 break-words text-[11px] leading-snug text-neutral-600 dark:text-neutral-400">
           Most recent transaction: {mostRecentTransactionDate}
         </div>
+        {rankScoreOutOf100 != null ? (
+          <div className="mt-0.5 break-words text-[11px] font-semibold leading-snug text-neutral-700 dark:text-neutral-300">
+            Rank score: {rankScoreOutOf100}/100
+            {player.rankOrdinal != null ? ` (#${player.rankOrdinal})` : ""}
+          </div>
+        ) : null}
       </div>
     </Link>
   )

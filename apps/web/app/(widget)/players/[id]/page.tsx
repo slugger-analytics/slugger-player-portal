@@ -16,15 +16,22 @@ import { PlayerDetailFavoriteBar } from "@/components/favorites/PlayerDetailFavo
 import { PlayerHistoryTracker } from "@/components/history/PlayerHistoryTracker"
 import { fetchPlayerProfile } from "@/lib/api"
 
-type Props = { params: Promise<{ id: string }> }
+type Props = {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ rankScore?: string }>
+}
 
 function isPitcherPosition(position: string): boolean {
   const pos = position.trim().toLowerCase()
   return pos === "p" || pos.startsWith("p-") || pos.includes("pitch")
 }
 
-export default async function PlayerDetailPage({ params }: Props) {
+export default async function PlayerDetailPage({ params, searchParams }: Props) {
   const { id } = await params
+  const sp = await searchParams
+  const rankScoreRaw = Number(sp.rankScore)
+  const rankScoreOutOf100 =
+    Number.isFinite(rankScoreRaw) && rankScoreRaw >= 0 && rankScoreRaw <= 100 ? Math.round(rankScoreRaw) : null
   let profile
   try {
     profile = await fetchPlayerProfile(id)
@@ -70,6 +77,11 @@ export default async function PlayerDetailPage({ params }: Props) {
           <span>
             <span className="text-neutral-500">Status:</span> {p.status}
           </span>
+          {rankScoreOutOf100 != null ? (
+            <span>
+              <span className="text-neutral-500">Rank score:</span> {rankScoreOutOf100}/100
+            </span>
+          ) : null}
           {p.age != null ? (
             <span>
               <span className="text-neutral-500">Age:</span> {p.age}

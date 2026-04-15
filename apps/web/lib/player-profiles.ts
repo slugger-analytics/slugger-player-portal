@@ -1,4 +1,5 @@
 import type { UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
+import type { RankingPreferences } from "@available-player-portal/shared"
 
 const STORAGE_KEY = "portal-player-search-profiles"
 
@@ -8,6 +9,7 @@ export type PlayerSearchProfile = {
   createdAt: string
   filters: UiFilter[]
   onlyWithStats: boolean
+  rankingPreferences?: RankingPreferences
 }
 
 export function loadProfiles(): PlayerSearchProfile[] {

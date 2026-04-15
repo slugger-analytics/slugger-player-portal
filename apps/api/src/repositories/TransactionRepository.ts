@@ -82,6 +82,25 @@ export class TransactionRepository {
     return out
   }
 
+  async getMostRecentProfileTransactionsByPlayerIds(
+    playerIds: string[],
+    transactionTypes?: TransactionTypeFilter[],
+  ): Promise<Map<string, { date: string; type: string }>> {
+    const out = new Map<string, { date: string; type: string }>()
+    if (playerIds.length === 0) return out
+    const rows = await prisma.transaction.findMany({
+      where: { playerId: { in: playerIds } },
+      select: { playerId: true, date: true, type: true },
+    })
+    for (const r of rows) {
+      if (!this.matchesTransactionTypeFilter(r.type, transactionTypes)) continue
+      const d = r.date.toISOString().slice(0, 10)
+      const prev = out.get(r.playerId)
+      if (!prev || d > prev.date) out.set(r.playerId, { date: d, type: r.type })
+    }
+    return out
+  }
+
   /**
    * Reverse chronological (newest first); tie-break by id for same calendar date.
    * Only retired, released, and free-agent types (see shared `isTransactionShownOnPlayerProfile`).

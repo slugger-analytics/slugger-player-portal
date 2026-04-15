@@ -244,9 +244,13 @@ export class PlayerRepository {
     if (filters.lastTransactionDays != null) {
       return this.getPlayersByRecentTransaction(filters)
     }
-    if (filters.sortBy === "recentProfileTransaction" || filters.sortBy === "lastName") {
+    if (
+      filters.sortBy === "recentProfileTransaction" ||
+      filters.sortBy === "lastName" ||
+      filters.sortBy === "rankScore"
+    ) {
       throw new Error(
-        "sortBy=recentProfileTransaction|lastName is handled in PlayerDataService (custom ordering)",
+        "sortBy=recentProfileTransaction|lastName|rankScore is handled in PlayerDataService (custom ordering)",
       )
     }
     const where = this.playerWhereFromFilters(filters)

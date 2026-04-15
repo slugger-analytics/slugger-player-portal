@@ -25,6 +25,7 @@ import type {
   PitchingStats,
   Transaction,
 } from "../types/models"
+import { computeRankScores, type RankingPreferences } from "@available-player-portal/shared"
 import { BattingStatsRepository } from "../repositories/BattingStatsRepository"
 import { PitchingStatsRepository } from "../repositories/PitchingStatsRepository"
 import { PlayerRepository } from "../repositories/PlayerRepository"
@@ -52,6 +53,9 @@ export class PlayerDataService {
 
   /** List + total row count for `GET /players` pagination (`limit` / `offset`). */
   async listPlayerSummariesWithTotal(filters: PlayerFilters): Promise<PlayerSummariesResponse> {
+    if (filters.sortBy === "rankScore") {
+      return this.listPlayerSummariesByRanking(filters)
+    }
     if (
       (filters.sortBy === "recentProfileTransaction" && filters.lastTransactionDays == null) ||
       filters.sortBy === "lastName"
@@ -74,6 +78,202 @@ export class PlayerDataService {
       })
     }
     return { players, total }
+  }
+
+  private defaultRankingPreferences(): RankingPreferences {
+    return {
+      weights: {
+        performance: 0.3,
+        experience: 0.2,
+        positionMatch: 0.15,
+        availability: 0.15,
+        recentTransactions: 0.2,
+      },
+      targetPosition: undefined,
+    }
+  }
+
+  private isPitcherPosition(position: string): boolean {
+    const pos = position.trim().toLowerCase()
+    return pos === "p" || pos.startsWith("p-") || pos.includes("pitch")
+  }
+
+  /**
+   * Full-filter ranking order (1 = highest score) for a player list, for attaching score + ordinal
+   * when the client sends {@link PlayerFilters.rankingPreferences}.
+   */
+  private async getRankingMetaByPlayerId(
+    list: Player[],
+    filters: PlayerFilters,
+  ): Promise<
+    Map<
+      string,
+      {
+        rankScore: number | null
+        rankBreakdown: NonNullable<PlayerSummary["rankBreakdown"]> | null
+        rankOrdinal: number
+      }
+    >
+  > {
+    const out = new Map<
+      string,
+      {
+        rankScore: number | null
+        rankBreakdown: NonNullable<PlayerSummary["rankBreakdown"]> | null
+        rankOrdinal: number
+      }
+    >()
+    if (list.length === 0) return out
+    const ids = list.map((p) => p.id)
+    const [battingById, pitchingById, txById] = await Promise.all([
+      this.batting.getStatsByPlayerIds(ids),
+      this.pitching.getStatsByPlayerIds(ids),
+      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids),
+    ])
+    const rankingInput = list.map((p) => {
+      const batting = battingById.get(p.id) ?? []
+      const pitching = pitchingById.get(p.id) ?? []
+      const recentTx = txById.get(p.id)
+      const isPitcher = this.isPitcherPosition(p.position ?? "")
+      const mostRecentBatting = batting[0]
+      const mostRecentPitching = pitching[0]
+      return {
+        id: p.id,
+        position: p.position,
+        status: p.status,
+        experienceLevel: p.experienceLevel,
+        isPitcher,
+        ops: mostRecentBatting?.ops,
+        obp: mostRecentBatting?.obp,
+        slg: mostRecentBatting?.slg,
+        era: mostRecentPitching?.era,
+        whip: mostRecentPitching?.whip,
+        k: mostRecentPitching?.k,
+        ip: mostRecentPitching?.ip,
+        transactionDate: recentTx?.date ?? null,
+        transactionType: recentTx?.type ?? null,
+      }
+    })
+    const rankingPreferences: RankingPreferences = {
+      ...(filters.rankingPreferences ?? this.defaultRankingPreferences()),
+    }
+    if (!rankingPreferences.targetPosition?.trim() && filters.position?.trim()) {
+      rankingPreferences.targetPosition = filters.position
+    }
+    const scores = computeRankScores({
+      players: rankingInput,
+      weights: rankingPreferences.weights,
+      targetPosition: rankingPreferences.targetPosition,
+    })
+    const rows = list.map((p) => {
+      const score = scores.get(p.id)
+      return {
+        id: p.id,
+        name: p.name,
+        rankScore: score?.score ?? null,
+        rankBreakdown: score ? { ...score.components } : null,
+      }
+    })
+    rows.sort((a, b) => {
+      const as = a.rankScore ?? -1
+      const bs = b.rankScore ?? -1
+      if (as !== bs) return bs - as
+      const aLast = a.name.trim().split(/\s+/).at(-1)?.toLowerCase() ?? ""
+      const bLast = b.name.trim().split(/\s+/).at(-1)?.toLowerCase() ?? ""
+      if (aLast !== bLast) return aLast.localeCompare(bLast)
+      return a.name.localeCompare(b.name)
+    })
+    rows.forEach((r, i) => {
+      out.set(r.id, {
+        rankScore: r.rankScore,
+        rankBreakdown: r.rankBreakdown,
+        rankOrdinal: i + 1,
+      })
+    })
+    return out
+  }
+
+  private async listPlayerSummariesByRanking(filters: PlayerFilters): Promise<PlayerSummariesResponse> {
+    const candidates = await this.players.listPlayerIdAndNameMatching(filters)
+    if (candidates.length === 0) return { players: [], total: 0 }
+    const ids = candidates.map((c) => c.id)
+    const list = await this.players.getPlayersByIdsInOrder(ids)
+    if (list.length === 0) return { players: [], total: 0 }
+
+    const [battingById, pitchingById, txById] = await Promise.all([
+      this.batting.getStatsByPlayerIds(ids),
+      this.pitching.getStatsByPlayerIds(ids),
+      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids),
+    ])
+    const txMaxById = await this.transactions.getMaxTransactionDatesByPlayerIds(ids)
+    const players: PlayerSummary[] = []
+    const rankingInput = list.map((p) => {
+      const batting = battingById.get(p.id) ?? []
+      const pitching = pitchingById.get(p.id) ?? []
+      const recentTx = txById.get(p.id)
+      const arr = pickStatArrayForLine(batting, pitching, p.position)
+      players.push({
+        id: p.id,
+        name: p.name,
+        position: p.position,
+        team: p.team,
+        status: p.status,
+        experienceLevel: p.experienceLevel ?? null,
+        minimalStatLine: this.statLine.generateMinimalStatLine(arr),
+        mostRecentTeam: p.team,
+        imageUrl: null,
+        mostRecentTransactionDate: txMaxById.get(p.id) ?? null,
+      })
+      const isPitcher = this.isPitcherPosition(p.position ?? "")
+      const mostRecentBatting = batting[0]
+      const mostRecentPitching = pitching[0]
+      return {
+        id: p.id,
+        position: p.position,
+        status: p.status,
+        experienceLevel: p.experienceLevel,
+        isPitcher,
+        ops: mostRecentBatting?.ops,
+        obp: mostRecentBatting?.obp,
+        slg: mostRecentBatting?.slg,
+        era: mostRecentPitching?.era,
+        whip: mostRecentPitching?.whip,
+        k: mostRecentPitching?.k,
+        ip: mostRecentPitching?.ip,
+        transactionDate: recentTx?.date ?? null,
+        transactionType: recentTx?.type ?? null,
+      }
+    })
+    const rankingPreferences = filters.rankingPreferences ?? this.defaultRankingPreferences()
+    if (!rankingPreferences.targetPosition?.trim() && filters.position?.trim()) {
+      rankingPreferences.targetPosition = filters.position
+    }
+    const scores = computeRankScores({
+      players: rankingInput,
+      weights: rankingPreferences.weights,
+      targetPosition: rankingPreferences.targetPosition,
+    })
+    for (const s of players) {
+      const score = scores.get(s.id)
+      s.rankScore = score?.score ?? null
+      s.rankBreakdown = score ? { ...score.components } : null
+    }
+    const sorted = [...players].sort((a, b) => {
+      const as = a.rankScore ?? -1
+      const bs = b.rankScore ?? -1
+      if (as !== bs) return bs - as
+      const aLast = a.name.trim().split(/\s+/).at(-1)?.toLowerCase() ?? ""
+      const bLast = b.name.trim().split(/\s+/).at(-1)?.toLowerCase() ?? ""
+      if (aLast !== bLast) return aLast.localeCompare(bLast)
+      return a.name.localeCompare(b.name)
+    })
+    sorted.forEach((s, i) => {
+      s.rankOrdinal = i + 1
+    })
+    const total = sorted.length
+    const offset = filters.offset ?? 0
+    const limit = filters.limit != null ? filters.limit : sorted.length
+    return { players: sorted.slice(offset, offset + limit), total }
   }
 
   private async listPlayerSummariesWithCustomOrdering(filters: PlayerFilters): Promise<PlayerSummariesResponse> {
@@ -112,14 +312,28 @@ export class PlayerDataService {
     const slice = filtered.slice(offset, offset + limit)
     const list = await this.players.getPlayersByIdsInOrder(slice.map((s) => s.id))
     if (list.length === 0) return { players: [], total }
+    const rankingMeta =
+      filters.rankingPreferences != null
+        ? await this.getRankingMetaByPlayerId(
+            await this.players.getPlayersByIdsInOrder(filtered.map((c) => c.id)),
+            filters,
+          )
+        : undefined
     const txMaxById = await this.transactions.getMaxTransactionDatesByPlayerIds(list.map((p) => p.id))
     const players: PlayerSummary[] = []
     for (const p of list) {
       const base = await this.buildPlayerSummaryStatsOnly(p)
-      players.push({
+      const row: PlayerSummary = {
         ...base,
         mostRecentTransactionDate: txMaxById.get(p.id) ?? null,
-      })
+      }
+      const meta = rankingMeta?.get(p.id)
+      if (meta) {
+        row.rankScore = meta.rankScore
+        row.rankBreakdown = meta.rankBreakdown
+        row.rankOrdinal = meta.rankOrdinal
+      }
+      players.push(row)
     }
     return { players, total }
   }

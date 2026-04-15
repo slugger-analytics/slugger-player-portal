@@ -18,6 +18,7 @@ import {
   type BatHand,
   isBatHandQueryValue,
   isLastTransactionDaysOption,
+  type RankingPreferences,
   isThrowHandQueryValue,
   type TransactionTypeFilter,
   type ThrowHand,
@@ -56,6 +57,38 @@ function parseTransactionTypesQuery(query: Record<string, unknown>): Transaction
     else throw new Error("Invalid transactionTypes")
   }
   return out.length ? [...new Set(out)] : undefined
+}
+
+function parseRankingPreferencesQuery(query: Record<string, unknown>): RankingPreferences | undefined {
+  const perfRaw = firstString(query.rankWPerf)
+  const expRaw = firstString(query.rankWExp)
+  const posRaw = firstString(query.rankWPos)
+  const availRaw = firstString(query.rankWAvail)
+  const txRaw = firstString(query.rankWTx)
+  const raws = [perfRaw, expRaw, posRaw, availRaw, txRaw]
+  if (raws.every((r) => r == null || r.trim() === "")) return undefined
+  const perf = Number(perfRaw)
+  const exp = Number(expRaw)
+  const pos = Number(posRaw)
+  const avail = Number(availRaw)
+  const tx = Number(txRaw)
+  const nums = [perf, exp, pos, avail, tx]
+  if (nums.some((n) => !Number.isFinite(n) || n < 0 || n > 1)) {
+    throw new Error("Invalid ranking weights")
+  }
+  const sum = perf + exp + pos + avail + tx
+  if (Math.abs(sum - 1) > 0.00001) throw new Error("Invalid ranking weights")
+  const targetPosition = firstString(query.rankTargetPosition)?.trim()
+  return {
+    weights: {
+      performance: perf,
+      experience: exp,
+      positionMatch: pos,
+      availability: avail,
+      recentTransactions: tx,
+    },
+    targetPosition: targetPosition || undefined,
+  }
 }
 
 /** Maps `req.query` into {@link PlayerFilters}; throws if `ageMin`/`ageMax` are invalid. */
@@ -136,6 +169,8 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
       sortByRaw === "updates"
     ) {
       sortBy = "recentProfileTransaction"
+    } else if (sortByRaw === "rankscore" || sortByRaw === "rank_score" || sortByRaw === "ranking") {
+      sortBy = "rankScore"
     } else {
       throw new Error("Invalid sortBy")
     }
@@ -177,6 +212,7 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     throws = throwsRaw.trim().toUpperCase() as ThrowHand
   }
   const transactionTypes = parseTransactionTypesQuery(query)
+  const rankingPreferences = parseRankingPreferencesQuery(query)
 
   return {
     position,
@@ -195,6 +231,7 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     transactionTypes,
     bats,
     throws,
+    rankingPreferences,
   }
 }
 
