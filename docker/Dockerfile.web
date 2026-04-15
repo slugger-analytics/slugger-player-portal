@@ -10,7 +10,10 @@
 # passed as --build-arg, not set as Lambda environment variables.
 
 # ─── Stage 1: Install deps and build ─────────────────────────────────────────
-FROM --platform=linux/arm64 node:22-alpine AS builder
+# Build on the native platform (amd64 on GH runners) to avoid QEMU crashes
+# with SWC. The JS output is platform-independent; only the runtime image
+# needs to be arm64.
+FROM node:22-alpine AS builder
 WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1 \
