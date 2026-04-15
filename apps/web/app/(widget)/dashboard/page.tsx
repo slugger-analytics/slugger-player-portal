@@ -190,7 +190,7 @@ export default function PlayerDiscoveryHomePage() {
     setSyncing(true)
     setSyncBanner(null)
     try {
-      const res = await fetch(withBasePath("/api/sync"), { method: "POST" })
+      const res = await fetch(withBasePath("/trigger-sync"), { method: "POST" })
       const body = (await res.json()) as {
         ok?: boolean
         error?: string
