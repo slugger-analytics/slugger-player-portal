@@ -34,6 +34,15 @@ export default async function PlayerDetailPage({ params }: Props) {
 
   const p = profile.player
   const showPitching = isPitcherPosition(p.position ?? "")
+  const mostRecentPitchingRows =
+    profile.mostRecentPitchingRows ?? (profile.mostRecentPitching ? [profile.mostRecentPitching] : [])
+  const mostRecentBattingRows =
+    profile.mostRecentBattingRows ?? (profile.mostRecentBatting ? [profile.mostRecentBatting] : [])
+  const mostRecentStatsRows = showPitching ? mostRecentPitchingRows : mostRecentBattingRows
+  const fallbackRows = showPitching ? mostRecentBattingRows : mostRecentPitchingRows
+  const currentTeamFromStats =
+    [...mostRecentStatsRows, ...fallbackRows].find((row) => (row.teamName ?? "").trim().length > 0)?.teamName ??
+    p.team
 
   return (
     <main className="px-4 pb-10 sm:px-5">
@@ -56,7 +65,7 @@ export default async function PlayerDetailPage({ params }: Props) {
             <span className="text-neutral-500">Position:</span> {p.position}
           </span>
           <span>
-            <span className="text-neutral-500">Team:</span> {p.team}
+            <span className="text-neutral-500">Current team:</span> {currentTeamFromStats || "—"}
           </span>
           <span>
             <span className="text-neutral-500">Status:</span> {p.status}
@@ -88,7 +97,7 @@ export default async function PlayerDetailPage({ params }: Props) {
               Pitching
             </h2>
             <PitchingTable
-              recentRows={profile.mostRecentPitchingRows ?? (profile.mostRecentPitching ? [profile.mostRecentPitching] : [])}
+              recentRows={mostRecentPitchingRows}
               previous={profile.previousPitching}
             />
           </div>
@@ -98,7 +107,7 @@ export default async function PlayerDetailPage({ params }: Props) {
               Batting
             </h2>
             <BattingTable
-              recentRows={profile.mostRecentBattingRows ?? (profile.mostRecentBatting ? [profile.mostRecentBatting] : [])}
+              recentRows={mostRecentBattingRows}
               previous={profile.previousBatting}
             />
           </div>
