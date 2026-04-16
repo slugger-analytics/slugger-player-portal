@@ -6,6 +6,7 @@ import { ChevronDown, ChevronUp, Trash2 } from "lucide-react"
 import { PlayerAvatarPlaceholder } from "@/components/discovery/PlayerAvatarPlaceholder"
 import { useFavorites } from "@/components/favorites/FavoritesProvider"
 import { fetchPlayerProfile } from "@/lib/api"
+import { clearDiscoverySnapshot } from "@/lib/discovery-session"
 import type { PlayerProfile } from "@available-player-portal/shared"
 
 type RowState =
@@ -16,6 +17,10 @@ type RowState =
 export default function FavoritesPage() {
   const { favoriteIds, removeFavorite, moveFavorite } = useFavorites()
   const [rows, setRows] = useState<RowState[]>([])
+
+  useEffect(() => {
+    clearDiscoverySnapshot()
+  }, [])
 
   useEffect(() => {
     let cancelled = false

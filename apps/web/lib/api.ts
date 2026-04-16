@@ -22,14 +22,14 @@ export function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
     return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
   }
-  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
+  return process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
 }
 
-/** Builds `?a=1&b=2` from a params object; omits undefined and empty strings. */
-function qs(params: Record<string, string | number | undefined>): string {
+/** Builds `?a=1&b=2` from a params object; omits undefined, empty strings, and `false`. */
+function qs(params: Record<string, string | number | boolean | undefined>): string {
   const u = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
-    if (v === undefined || v === "") continue
+    if (v === undefined || v === "" || v === false) continue
     u.set(k, String(v))
   }
   const s = u.toString()
@@ -48,7 +48,7 @@ function rethrowNetworkError(e: unknown, context: string): never {
 
 /** `GET /players` — filters + optional `limit` / `offset`; returns `{ players, total }`. */
 export async function fetchPlayerSummaries(
-  params: Record<string, string | number | undefined>,
+  params: Record<string, string | number | boolean | undefined>,
 ): Promise<PlayerSummariesResponse> {
   const base = getApiBaseUrl()
   try {
@@ -65,6 +65,35 @@ export async function fetchPlayerSummaries(
     return { players: [], total: 0 }
   } catch (e) {
     rethrowNetworkError(e, "GET /players")
+  }
+}
+
+/**
+ * Loads a single player as {@link PlayerSummary} for cards (e.g. Updates “watched” list).
+ * Uses `GET /players/:id` and derives `minimalStatLine` from recent batting/pitching when present.
+ */
+export async function fetchPlayerSummaryForCard(id: string): Promise<PlayerSummary> {
+  const profile = await fetchPlayerProfile(id)
+  const p = profile.player
+  let minimalStatLine = "—"
+  if (profile.mostRecentBatting) {
+    const b = profile.mostRecentBatting
+    minimalStatLine = `AVG ${Number(b.avg).toFixed(3)} · OPS ${Number(b.ops).toFixed(3)}`
+  } else if (profile.mostRecentPitching) {
+    const pit = profile.mostRecentPitching
+    minimalStatLine = `ERA ${Number(pit.era).toFixed(2)} · WHIP ${Number(pit.whip).toFixed(2)}`
+  }
+  return {
+    id: p.id,
+    name: p.name,
+    position: p.position,
+    team: p.team,
+    status: p.status,
+    experienceLevel: p.experienceLevel ?? null,
+    minimalStatLine,
+    mostRecentTeam: p.team,
+    imageUrl: null,
+    mostRecentTransactionDate: profile.mostRecentTransactionDate ?? null,
   }
 }
 

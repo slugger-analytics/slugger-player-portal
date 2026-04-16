@@ -38,10 +38,11 @@ Returns a list of player summaries for the discovery UI, with optional filters. 
 | `team`     | string | Substring match on `team` (case-insensitive). |
 | `ageMin`   | number | Inclusive minimum `age`. |
 | `ageMax`   | number | Inclusive maximum `age`. |
+| `hasStats` | string | When `true`, `1`, or `yes`, only players with **≥1** `batting_stats` **or** `pitching_stats` row. `false` / `0` / `no` clears the filter. |
 | `limit`    | number | Max rows to return (integer **1–100**). Applies `take` in Prisma after sort by name. |
 | `offset`   | number | Skip this many rows before applying `limit` (integer **≥ 0**). Ignored unless `limit` is set. |
 
-Invalid `ageMin` / `ageMax` / `limit` / `offset` (non-numeric or out of range) → **`400`** with `{ "error": "Invalid …" }`.  
+Invalid `ageMin` / `ageMax` / `limit` / `offset` / `hasStats` (unrecognized value) → **`400`** with `{ "error": "Invalid …" }`.  
 `offset` **> 0** without `limit` → **`400`** with `{ "error": "Invalid offset: use limit when offset is set" }`.
 
 **Response:** `200 OK` — JSON object **`PlayerSummariesResponse`**:

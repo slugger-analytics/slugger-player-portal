@@ -5,6 +5,11 @@
 
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import {
+  batHandDisplayLabel,
+  experienceLevelDisplayLabel,
+  throwHandDisplayLabel,
+} from "@available-player-portal/shared"
 import type { BattingStats, PitchingStats } from "@available-player-portal/shared"
 import { TransactionHistoryView } from "@/components/discovery/TransactionHistoryView"
 import { PlayerDetailFavoriteBar } from "@/components/favorites/PlayerDetailFavoriteBar"
@@ -55,6 +60,18 @@ export default async function PlayerDetailPage({ params }: Props) {
               <span className="text-neutral-500">Age:</span> {p.age}
             </span>
           ) : null}
+          <span>
+            <span className="text-neutral-500">Max experience level:</span>{" "}
+            {experienceLevelDisplayLabel(p.experienceLevel)}
+          </span>
+          <span>
+            <span className="text-neutral-500">Bats:</span>{" "}
+            {p.bats != null ? batHandDisplayLabel(p.bats) : "—"}
+          </span>
+          <span>
+            <span className="text-neutral-500">Throws:</span>{" "}
+            {p.throws != null ? throwHandDisplayLabel(p.throws) : "—"}
+          </span>
         </div>
       </header>
 
@@ -80,7 +97,8 @@ export default async function PlayerDetailPage({ params }: Props) {
       </section>
 
       <section>
-        <h2 className="mb-4 text-lg font-bold text-black">Transaction history</h2>
+        <h2 className="mb-1 text-lg font-bold text-black">Recent transactions</h2>
+        <p className="mb-4 text-xs text-neutral-500">Retired, released, and free agent only.</p>
         <TransactionHistoryView playerId={p.id} />
       </section>
     </main>

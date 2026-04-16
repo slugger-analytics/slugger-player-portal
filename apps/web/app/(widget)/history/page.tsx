@@ -9,6 +9,7 @@ import {
   writeHistoryEntries,
   type HistoryEntry,
 } from "@/lib/historyStorage"
+import { clearDiscoverySnapshot } from "@/lib/discovery-session"
 
 function formatViewedAt(iso: string): string {
   const d = new Date(iso)
@@ -18,6 +19,10 @@ function formatViewedAt(iso: string): string {
 
 export default function HistoryPage() {
   const [entries, setEntries] = useState<HistoryEntry[]>([])
+
+  useEffect(() => {
+    clearDiscoverySnapshot()
+  }, [])
 
   useEffect(() => {
     setEntries(readHistoryEntries())
