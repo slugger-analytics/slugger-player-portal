@@ -8,6 +8,7 @@
  * 3. Parse strings into typed rows (`DataParser`)
  * 4. Merge `Player` rows from all feeds (`mergePlayers`)
  * 5. Upsert `players`, then `transactions`, `batting_stats`, `pitching_stats`
+ * 6. Enforce portal retention: delete transactions before 2025-01-01, recompute profile-visible flags, remove players with none (cascades stats)
  *
  * **Usage:**
  * - CLI: `npm run sync` (tsx) or `npm run sync:ts-node` from `apps/api`
@@ -30,7 +31,6 @@ import { PitchingStatsRepository } from "../repositories/PitchingStatsRepository
 import { mergeExperienceLevels } from "@available-player-portal/shared"
 
 import type { Player } from "../types/models"
-import { isPlayerDiscoveryEligible } from "../utils/playerEligibility"
 
 function mergePlayers(lists: Player[][]): Player[] {
   const map = new Map<string, Player>()
@@ -93,12 +93,13 @@ export async function runSyncPipeline(): Promise<SyncPipelineResult> {
     parser.parsePlayersFromTransactionFeed(tranxRaw),
     parser.parsePlayersFromBattingFeed(batRaw),
     parser.parsePlayersFromPitchingFeed(pitRaw),
-  ]).filter(isPlayerDiscoveryEligible)
+  ])
 
   await players.upsertPlayers(playerList)
   await txs.upsertTransactions(parsedTx)
   await batting.upsertStats(parsedBat)
   await pitching.upsertStats(parsedPit)
+  await txs.enforcePortalTransactionRetentionPolicy()
 
   const result: SyncPipelineResult = {
     players: playerList.length,

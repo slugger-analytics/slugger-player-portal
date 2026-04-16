@@ -10,6 +10,8 @@ export type FilterKind =
   | "team"
   | "status"
   | "experienceLevel"
+  /** Backward compatibility for older saved profiles; new UI uses a single range row. */
+  | "experienceLevelMin"
   | "lastTransactionDays"
   | "handedness"
 
@@ -20,6 +22,9 @@ export type UiFilter = {
   rawValue?: string
   ageMode?: "lt" | "gt"
   ageValue?: number
+  /** For `experienceLevel` range row. */
+  experienceLevelMinRaw?: string
+  experienceLevelMaxRaw?: string
   /**
    * When {@link FilterKind} is `handedness`: set one or both. Omitted side means “any”
    * (no filter on that column).
@@ -47,9 +52,11 @@ export function defaultUiFilterForPreset(preset: FilterKind): UiFilter {
       return {
         id,
         kind: "experienceLevel",
-        label: "Max experience level: Select",
+        label: "Experience level: Select range",
         rawValue: "",
       }
+    case "experienceLevelMin":
+      return { id, kind: "experienceLevelMin", label: "Min experience level: Select", rawValue: "" }
     case "lastTransactionDays":
       return {
         id,
@@ -71,7 +78,7 @@ export const ADD_PREFERENCE_OPTIONS: { kind: FilterKind; label: string }[] = [
   { kind: "age", label: "Age" },
   { kind: "team", label: "Team" },
   { kind: "status", label: "Status" },
-  { kind: "experienceLevel", label: "Max experience level" },
+  { kind: "experienceLevel", label: "Experience level" },
   { kind: "lastTransactionDays", label: "Last X days" },
   { kind: "handedness", label: "Handedness" },
 ]
@@ -104,7 +111,13 @@ export function filtersToQuery(filters: UiFilter[]): Record<string, string | num
       if (f.ageMode === "lt") q.ageMax = f.ageValue
       if (f.ageMode === "gt") q.ageMin = f.ageValue
     }
-    if (f.kind === "experienceLevel" && f.rawValue) q.experienceLevel = f.rawValue
+    if (f.kind === "experienceLevel") {
+      const max = f.experienceLevelMaxRaw ?? f.rawValue
+      const min = f.experienceLevelMinRaw
+      if (max) q.experienceLevel = max
+      if (min) q.experienceLevelMin = min
+    }
+    if (f.kind === "experienceLevelMin" && f.rawValue) q.experienceLevelMin = f.rawValue
     if (f.kind === "lastTransactionDays" && f.rawValue) {
       const n = Number(f.rawValue)
       if (Number.isInteger(n)) q.lastTransactionDays = n

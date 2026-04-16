@@ -96,6 +96,39 @@ function rowToRecord(header: string[], cells: string[]): Record<string, string> 
   return o
 }
 
+function findSeasonTeamColumnIndex(header: string[]): number {
+  const keys = new Set([
+    "team",
+    "teamname",
+    "tm",
+    "org",
+    "orgname",
+    "organization",
+    "club",
+    "clubname",
+  ])
+  for (let i = 0; i < header.length; i++) {
+    const k = toCamelCase(header[i] ?? "").toLowerCase()
+    if (keys.has(k)) return i
+  }
+  return -1
+}
+
+function extractSeasonTeamName(
+  record: Record<string, string>,
+  header: string[],
+  cells: string[],
+): string | null {
+  const direct = (record.team || record.teamName || record.tm || record.org || record.orgName || "").trim()
+  if (direct) return direct
+  const idx = findSeasonTeamColumnIndex(header)
+  if (idx >= 0 && idx < cells.length) {
+    const v = String(cells[idx] ?? "").trim()
+    if (v) return v
+  }
+  return null
+}
+
 /** Parses US-style `M/D/YYYY` dates from the transaction feed to `YYYY-MM-DD`. */
 function parseUsDateToIso(s: string): string | null {
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s.trim())
@@ -216,17 +249,23 @@ export class DataParser {
       const playerId = (r.playerid || r.playerId || "").trim()
       const year = parseInt(String(r.year || ""), 10)
       if (!playerId || Number.isNaN(year)) continue
+      const teamName = extractSeasonTeamName(r, header, cells)
       const avg = parseFloat(String(r.bavg ?? r.Bavg ?? "0"))
       const obp = parseFloat(String(r.obp ?? "0"))
       const slg = parseFloat(String(r.slg ?? r.Slg ?? "0"))
       const ops = parseFloat(String(r.ops ?? r.OPS ?? "0"))
+      const bb = parseInt(String(r.bb ?? r.BB ?? "0"), 10)
+      const hr = parseInt(String(r.hr ?? r.HR ?? "0"), 10)
       out.push({
         playerId,
         season: year,
+        teamName,
         avg: Number.isFinite(avg) ? avg : 0,
         obp: Number.isFinite(obp) ? obp : 0,
         slg: Number.isFinite(slg) ? slg : 0,
         ops: Number.isFinite(ops) ? ops : 0,
+        bb: Number.isFinite(bb) ? bb : 0,
+        hr: Number.isFinite(hr) ? hr : 0,
       })
     }
     return out
@@ -245,17 +284,23 @@ export class DataParser {
       const playerId = (r.playerid || r.playerId || "").trim()
       const year = parseInt(String(r.year || ""), 10)
       if (!playerId || Number.isNaN(year)) continue
+      const teamName = extractSeasonTeamName(r, header, cells)
+      const g = parseInt(String(r.g ?? r.G ?? "0"), 10)
       const era = parseFloat(String(r.era ?? "0"))
       const whip = parseFloat(String(r.whip ?? "0"))
       const ip = parseFloat(String(r.ip ?? r.IP ?? "0"))
       const k = parseInt(String(r.so ?? r.SO ?? "0"), 10)
+      const bb = parseInt(String(r.bb ?? r.BB ?? "0"), 10)
       out.push({
         playerId,
         season: year,
+        teamName,
+        g: Number.isFinite(g) ? g : 0,
         era: Number.isFinite(era) ? era : 0,
         whip: Number.isFinite(whip) ? whip : 0,
         ip: Number.isFinite(ip) ? ip : 0,
         k: Number.isFinite(k) ? k : 0,
+        bb: Number.isFinite(bb) ? bb : 0,
       })
     }
     return out

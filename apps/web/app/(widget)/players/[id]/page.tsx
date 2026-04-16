@@ -16,10 +16,22 @@ import { PlayerDetailFavoriteBar } from "@/components/favorites/PlayerDetailFavo
 import { PlayerHistoryTracker } from "@/components/history/PlayerHistoryTracker"
 import { fetchPlayerProfile } from "@/lib/api"
 
-type Props = { params: Promise<{ id: string }> }
+type Props = {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ rankScore?: string }>
+}
 
-export default async function PlayerDetailPage({ params }: Props) {
+function isPitcherPosition(position: string): boolean {
+  const pos = position.trim().toLowerCase()
+  return pos === "p" || pos.startsWith("p-") || pos.includes("pitch")
+}
+
+export default async function PlayerDetailPage({ params, searchParams }: Props) {
   const { id } = await params
+  const sp = await searchParams
+  const rankScoreRaw = Number(sp.rankScore)
+  const rankScoreOutOf100 =
+    Number.isFinite(rankScoreRaw) && rankScoreRaw >= 0 && rankScoreRaw <= 100 ? Math.round(rankScoreRaw) : null
   let profile
   try {
     profile = await fetchPlayerProfile(id)
@@ -28,6 +40,16 @@ export default async function PlayerDetailPage({ params }: Props) {
   }
 
   const p = profile.player
+  const showPitching = isPitcherPosition(p.position ?? "")
+  const mostRecentPitchingRows =
+    profile.mostRecentPitchingRows ?? (profile.mostRecentPitching ? [profile.mostRecentPitching] : [])
+  const mostRecentBattingRows =
+    profile.mostRecentBattingRows ?? (profile.mostRecentBatting ? [profile.mostRecentBatting] : [])
+  const mostRecentStatsRows = showPitching ? mostRecentPitchingRows : mostRecentBattingRows
+  const fallbackRows = showPitching ? mostRecentBattingRows : mostRecentPitchingRows
+  const currentTeamFromStats =
+    [...mostRecentStatsRows, ...fallbackRows].find((row) => (row.teamName ?? "").trim().length > 0)?.teamName ??
+    p.team
 
   return (
     <main className="px-4 pb-10 sm:px-5">
@@ -50,11 +72,16 @@ export default async function PlayerDetailPage({ params }: Props) {
             <span className="text-neutral-500">Position:</span> {p.position}
           </span>
           <span>
-            <span className="text-neutral-500">Team:</span> {p.team}
+            <span className="text-neutral-500">Current team:</span> {currentTeamFromStats || "—"}
           </span>
           <span>
             <span className="text-neutral-500">Status:</span> {p.status}
           </span>
+          {rankScoreOutOf100 != null ? (
+            <span>
+              <span className="text-neutral-500">Rank score:</span> {rankScoreOutOf100}/100
+            </span>
+          ) : null}
           {p.age != null ? (
             <span>
               <span className="text-neutral-500">Age:</span> {p.age}
@@ -75,25 +102,28 @@ export default async function PlayerDetailPage({ params }: Props) {
         </div>
       </header>
 
-      <section className="mb-8 grid gap-8 md:grid-cols-2">
-        <div>
-          <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-portal-accent">
-            Batting
-          </h2>
-          <BattingTable
-            recent={profile.mostRecentBatting}
-            previous={profile.previousBatting}
-          />
-        </div>
-        <div>
-          <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-portal-accent">
-            Pitching
-          </h2>
-          <PitchingTable
-            recent={profile.mostRecentPitching}
-            previous={profile.previousPitching}
-          />
-        </div>
+      <section className="mb-8">
+        {showPitching ? (
+          <div>
+            <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-portal-accent">
+              Pitching
+            </h2>
+            <PitchingTable
+              recentRows={mostRecentPitchingRows}
+              previous={profile.previousPitching}
+            />
+          </div>
+        ) : (
+          <div>
+            <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-portal-accent">
+              Batting
+            </h2>
+            <BattingTable
+              recentRows={mostRecentBattingRows}
+              previous={profile.previousBatting}
+            />
+          </div>
+        )}
       </section>
 
       <section>
@@ -106,10 +136,10 @@ export default async function PlayerDetailPage({ params }: Props) {
 }
 
 function BattingTable({
-  recent,
+  recentRows,
   previous,
 }: {
-  recent: BattingStats | null
+  recentRows: BattingStats[]
   previous: BattingStats | null
 }) {
   return (
@@ -119,39 +149,64 @@ function BattingTable({
           <tr>
             <th className="px-3 py-2" />
             <th className="px-3 py-2">Season</th>
+            <th className="px-3 py-2">Team</th>
             <th className="px-3 py-2">AVG</th>
             <th className="px-3 py-2">OBP</th>
             <th className="px-3 py-2">SLG</th>
             <th className="px-3 py-2">OPS</th>
+            <th className="px-3 py-2">HR</th>
+            <th className="px-3 py-2">BB</th>
           </tr>
         </thead>
         <tbody>
-          <BattingRow label="Most recent" row={recent} />
-          <BattingRow label="Previous" row={previous} />
+          {recentRows.length ? (
+            recentRows.map((row, idx) => (
+              <BattingRow
+                key={`recent-${row.season}-${row.teamName ?? "none"}-${idx}-${row.avg}-${row.ops}`}
+                label={idx === 0 ? "Most recent" : ""}
+                row={row}
+                showDivider={idx === 0}
+              />
+            ))
+          ) : (
+            <BattingRow label="Most recent" row={null} showDivider />
+          )}
+          <BattingRow label="Previous" row={previous} showDivider />
         </tbody>
       </table>
     </div>
   )
 }
 
-function BattingRow({ label, row }: { label: string; row: BattingStats | null }) {
+function BattingRow({
+  label,
+  row,
+  showDivider,
+}: {
+  label: string
+  row: BattingStats | null
+  showDivider: boolean
+}) {
   return (
-    <tr className="border-t border-neutral-200">
+    <tr className={showDivider ? "border-t border-neutral-200" : ""}>
       <td className="whitespace-nowrap px-3 py-2 text-xs text-neutral-500">{label}</td>
       <td className="px-3 py-2 text-neutral-700">{row ? row.season : "—"}</td>
+      <td className="px-3 py-2 text-neutral-700">{row?.teamName ?? "—"}</td>
       <td className="px-3 py-2">{row ? row.avg.toFixed(3) : "—"}</td>
       <td className="px-3 py-2">{row ? row.obp.toFixed(3) : "—"}</td>
       <td className="px-3 py-2">{row ? row.slg.toFixed(3) : "—"}</td>
       <td className="px-3 py-2">{row ? row.ops.toFixed(3) : "—"}</td>
+      <td className="px-3 py-2">{row ? row.hr : "—"}</td>
+      <td className="px-3 py-2">{row ? row.bb : "—"}</td>
     </tr>
   )
 }
 
 function PitchingTable({
-  recent,
+  recentRows,
   previous,
 }: {
-  recent: PitchingStats | null
+  recentRows: PitchingStats[]
   previous: PitchingStats | null
 }) {
   return (
@@ -161,30 +216,55 @@ function PitchingTable({
           <tr>
             <th className="px-3 py-2" />
             <th className="px-3 py-2">Season</th>
+            <th className="px-3 py-2">Team</th>
+            <th className="px-3 py-2">G</th>
             <th className="px-3 py-2">ERA</th>
             <th className="px-3 py-2">WHIP</th>
             <th className="px-3 py-2">IP</th>
             <th className="px-3 py-2">K</th>
+            <th className="px-3 py-2">BB</th>
           </tr>
         </thead>
         <tbody>
-          <PitchingRow label="Most recent" row={recent} />
-          <PitchingRow label="Previous" row={previous} />
+          {recentRows.length ? (
+            recentRows.map((row, idx) => (
+              <PitchingRow
+                key={`recent-${row.season}-${row.teamName ?? "none"}-${idx}-${row.era}-${row.whip}-${row.g}`}
+                label={idx === 0 ? "Most recent" : ""}
+                row={row}
+                showDivider={idx === 0}
+              />
+            ))
+          ) : (
+            <PitchingRow label="Most recent" row={null} showDivider />
+          )}
+          <PitchingRow label="Previous" row={previous} showDivider />
         </tbody>
       </table>
     </div>
   )
 }
 
-function PitchingRow({ label, row }: { label: string; row: PitchingStats | null }) {
+function PitchingRow({
+  label,
+  row,
+  showDivider,
+}: {
+  label: string
+  row: PitchingStats | null
+  showDivider: boolean
+}) {
   return (
-    <tr className="border-t border-neutral-200">
+    <tr className={showDivider ? "border-t border-neutral-200" : ""}>
       <td className="whitespace-nowrap px-3 py-2 text-xs text-neutral-500">{label}</td>
       <td className="px-3 py-2 text-neutral-700">{row ? row.season : "—"}</td>
+      <td className="px-3 py-2 text-neutral-700">{row?.teamName ?? "—"}</td>
+      <td className="px-3 py-2">{row ? row.g : "—"}</td>
       <td className="px-3 py-2">{row ? row.era.toFixed(2) : "—"}</td>
       <td className="px-3 py-2">{row ? row.whip.toFixed(3) : "—"}</td>
       <td className="px-3 py-2">{row ? row.ip.toFixed(1) : "—"}</td>
       <td className="px-3 py-2">{row ? row.k : "—"}</td>
+      <td className="px-3 py-2">{row ? row.bb : "—"}</td>
     </tr>
   )
 }

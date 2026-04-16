@@ -45,6 +45,8 @@ model Player {
   throws             ThrowHand?        @map("throws")
   /// Discovery list filter; set on upsert from isPlayerDiscoveryEligible (see playerEligibility.ts).
   discoveryEligible  Boolean           @default(true) @map("discovery_eligible")
+  /// At least one profile-visible transaction (retired / released / free agent); maintained when transactions sync.
+  hasProfileVisibleTransaction Boolean @default(false) @map("has_profile_visible_transaction")
   createdAt          DateTime          @default(now()) @map("created_at")
   updatedAt          DateTime          @updatedAt @map("updated_at")
 
@@ -71,34 +73,40 @@ model Transaction {
   @@index([playerId])
 }
 
-// One row per player per season (batting). Unique (player_id, season).
+// One row per player per season per team (batting).
 model BattingStat {
   id       Int     @id @default(autoincrement())
   playerId String  @map("player_id")
   season   Int
+  teamName String  @default("") @map("team_name")
   avg      Decimal @db.Decimal(5, 3)
   obp      Decimal @db.Decimal(5, 3)
   slg      Decimal @db.Decimal(5, 3)
   ops      Decimal @db.Decimal(5, 3)
+  bb       Int     @default(0)
+  hr       Int     @default(0)
 
   player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
-  @@unique([playerId, season])
+  @@unique([playerId, season, teamName])
 }
 
-// One row per player per season (pitching). Unique (player_id, season).
+// One row per player per season per team (pitching).
 model PitchingStat {
   id       Int     @id @default(autoincrement())
   playerId String  @map("player_id")
   season   Int
+  teamName String  @default("") @map("team_name")
+  g        Int     @default(0)
   era      Decimal @db.Decimal(5, 2)
   whip     Decimal @db.Decimal(5, 3)
   ip       Decimal @db.Decimal(6, 1)
   k        Int
+  bb       Int     @default(0)
 
   player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
-  @@unique([playerId, season])
+  @@unique([playerId, season, teamName])
 }
 
 // Append-only raw feed bodies for debugging and audit (each sync may insert new rows).

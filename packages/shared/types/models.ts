@@ -38,19 +38,50 @@ export interface Transaction {
 export interface BattingStats {
   playerId: string
   season: number
+  teamName?: string | null
   avg: number
   obp: number
   slg: number
   ops: number
+  bb: number
+  /** Home runs (TBC batting feed `hr` / `HR`). */
+  hr: number
 }
 
 export interface PitchingStats {
   playerId: string
   season: number
+  teamName?: string | null
+  g: number
   era: number
   whip: number
   ip: number
   k: number
+  bb: number
+}
+
+export type TransactionTypeFilter = "retired" | "released" | "freeAgent"
+
+export interface RankingWeights {
+  performance: number
+  experience: number
+  positionMatch: number
+  availability: number
+  recentTransactions: number
+}
+
+export interface RankingPreferences {
+  weights: RankingWeights
+  targetPosition?: string
+}
+
+export interface RankBreakdown {
+  performance: number
+  experience: number
+  positionMatch: number
+  availability: number
+  recentTransactions: number
+  lambda: number
 }
 
 export interface PlayerFilters {
@@ -60,10 +91,15 @@ export interface PlayerFilters {
   ageMin?: number
   ageMax?: number
   /**
-   * **Exact** match on highest level only (`A_PLUS` → only A+, `MLB` → only MLB). No ranges.
-   * Query: `experienceLevel`, `experience_level`, `highlevel`, or `highLevel`.
+   * Highest experience level **at or below** this value (inclusive).
+   * Back-compat query keys: `experienceLevel`, `experience_level`, `highlevel`, `highLevel`.
    */
   experienceLevel?: string
+  /**
+   * Highest experience level **at or above** this value (inclusive).
+   * Query: `experienceLevelMin`, `experience_level_min`, `minExperienceLevel`, `min_level`, `minlevel`.
+   */
+  experienceLevelMin?: string
   /** When true, only players with at least one batting **or** pitching stat row. */
   hasStats?: boolean
   /** Max rows to return (1–100). When set, enables pagination with {@link offset}. */
@@ -75,7 +111,7 @@ export interface PlayerFilters {
    * `recentProfileTransaction` = newest profile-visible transaction date first (then name); requires
    * API support that joins transaction data. Omit `lastTransactionDays` when using this sort.
    */
-  sortBy?: "name" | "experienceLevel" | "recentProfileTransaction"
+  sortBy?: "name" | "lastName" | "experienceLevel" | "recentProfileTransaction" | "rankScore"
   /**
    * `asc` | `desc`. When omitted: `asc` for name, `desc` for experience level (MLB first).
    */
@@ -86,10 +122,13 @@ export interface PlayerFilters {
    * Allowed values: {@link LAST_TRANSACTION_DAYS_OPTIONS}.
    */
   lastTransactionDays?: number
+  /** Optional profile-visible transaction type filter used by discovery sorting/filtering. */
+  transactionTypes?: TransactionTypeFilter[]
   /** Exact match on {@link Player.bats} (L, R, B). Query: `bats`. */
   bats?: BatHand
   /** Exact match on {@link Player.throws} (L, R). Query: `throws`. */
   throws?: ThrowHand
+  rankingPreferences?: RankingPreferences
 }
 
 /** Allowed “Last X days” preference values (transaction recency window). */
@@ -115,6 +154,12 @@ export interface PlayerSummary {
   imageUrl?: string | null
   /** Latest calendar date among profile-visible transactions (retired / released / FA); null if none. */
   mostRecentTransactionDate?: string | null
+  /** Type for {@link mostRecentTransactionDate}; null when no profile-visible transaction. */
+  mostRecentTransactionType?: string | null
+  rankScore?: number | null
+  /** 1-based position when ordering by rank score (best = 1) among the current filter set. */
+  rankOrdinal?: number | null
+  rankBreakdown?: RankBreakdown | null
 }
 
 /** API response for `GET /players` (paginated list + total matching filters). */
@@ -127,8 +172,12 @@ export interface PlayerSummariesResponse {
 /** API response for GET /players/:id */
 export interface PlayerProfile {
   player: Player
+  /** All rows from the most recent batting season (can include multiple teams). */
+  mostRecentBattingRows?: BattingStats[]
   mostRecentBatting: BattingStats | null
   previousBatting: BattingStats | null
+  /** All rows from the most recent pitching season (can include multiple teams). */
+  mostRecentPitchingRows?: PitchingStats[]
   mostRecentPitching: PitchingStats | null
   previousPitching: PitchingStats | null
   transactions: Transaction[]

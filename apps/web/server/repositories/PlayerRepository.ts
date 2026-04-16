@@ -10,7 +10,12 @@
  * directly; keep HTTP layer thin).
  */
 
-import { isExperienceLevelCode, isLastTransactionDaysOption } from "@available-player-portal/shared"
+import {
+  experienceLevelsAtOrAbove,
+  experienceLevelsAtOrBelow,
+  isExperienceLevelCode,
+  isLastTransactionDaysOption,
+} from "@available-player-portal/shared"
 import type { BatHand as PrismaBatHand, ExperienceLevel, ThrowHand as PrismaThrowHand } from "@prisma/client"
 import { Prisma } from "@prisma/client"
 import type { Player, PlayerFilters } from "../types/models"
@@ -56,12 +61,32 @@ export class PlayerRepository {
       if (filters.ageMax != null) age.lte = filters.ageMax
       clauses.push({ age })
     }
-    if (filters.experienceLevel != null && filters.experienceLevel !== "") {
-      const code = filters.experienceLevel
-      if (!isExperienceLevelCode(code)) {
-        throw new Error(`Invalid experienceLevel: ${code}`)
+    const maxCode = filters.experienceLevel?.trim()
+    const minCode = filters.experienceLevelMin?.trim()
+    if (maxCode) {
+      if (!isExperienceLevelCode(maxCode)) throw new Error(`Invalid experienceLevel: ${maxCode}`)
+    }
+    if (minCode) {
+      if (!isExperienceLevelCode(minCode)) throw new Error(`Invalid experienceLevelMin: ${minCode}`)
+    }
+    if (maxCode || minCode) {
+      const above = minCode ? new Set(experienceLevelsAtOrAbove(minCode)) : null
+      const below = maxCode ? new Set(experienceLevelsAtOrBelow(maxCode)) : null
+      const allowed = ((): ExperienceLevel[] => {
+        const all = ["ROOKIE", "A", "A_PLUS", "AA", "AAA", "MLB"] as const
+        const out: ExperienceLevel[] = []
+        for (const c of all) {
+          if (above && !above.has(c)) continue
+          if (below && !below.has(c)) continue
+          out.push(c as ExperienceLevel)
+        }
+        return out
+      })()
+      if (allowed.length) {
+        clauses.push({ experienceLevel: { in: allowed } })
+      } else {
+        clauses.push({ id: { equals: "__no_match__" } })
       }
-      clauses.push({ experienceLevel: code as ExperienceLevel })
     }
     if (filters.hasStats) {
       clauses.push({
@@ -95,7 +120,9 @@ export class PlayerRepository {
 
   /** Shared `where` for `findMany` / `count` (does not use `limit` / `offset`). */
   private playerWhereFromFilters(filters: PlayerFilters): Prisma.PlayerWhereInput {
-    return this.combineWhereClauses(this.collectDiscoveryWhereClauses(filters))
+    const clauses = this.collectDiscoveryWhereClauses(filters)
+    clauses.push({ hasProfileVisibleTransaction: true })
+    return this.combineWhereClauses(clauses)
   }
 
   /** Same as API: indexed `discovery_eligible` + filters (used for transaction-recency path + count). */
@@ -104,6 +131,7 @@ export class PlayerRepository {
     opts?: { omitLastTransactionRecency?: boolean },
   ): Prisma.PlayerWhereInput {
     const clauses = this.collectDiscoveryWhereClauses(filters, opts)
+    clauses.push({ hasProfileVisibleTransaction: true })
     clauses.push({ discoveryEligible: true })
     return this.combineWhereClauses(clauses)
   }
@@ -216,9 +244,13 @@ export class PlayerRepository {
     if (filters.lastTransactionDays != null) {
       return this.getPlayersByRecentTransaction(filters)
     }
-    if (filters.sortBy === "recentProfileTransaction") {
+    if (
+      filters.sortBy === "recentProfileTransaction" ||
+      filters.sortBy === "lastName" ||
+      filters.sortBy === "rankScore"
+    ) {
       throw new Error(
-        "sortBy=recentProfileTransaction is handled in PlayerDataService (requires transaction join)",
+        "sortBy=recentProfileTransaction|lastName|rankScore is handled in PlayerDataService (custom ordering)",
       )
     }
     const where = this.playerWhereFromFilters(filters)
@@ -266,9 +298,11 @@ export class PlayerRepository {
     return ids.map((id) => byId.get(id)).filter((r): r is Player => r != null)
   }
 
-  /** Lookup by primary key (`Player.id` = TBC `playerid`). */
+  /** Lookup by primary key; only players with at least one profile-visible transaction (portal-visible). */
   async getPlayerById(id: string): Promise<Player | null> {
-    const r = await prisma.player.findUnique({ where: { id } })
+    const r = await prisma.player.findFirst({
+      where: { id, hasProfileVisibleTransaction: true },
+    })
     if (!r) return null
     return {
       id: r.id,
