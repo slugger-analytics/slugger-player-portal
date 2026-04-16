@@ -18,16 +18,20 @@ import {
   type BatHand,
   isBatHandQueryValue,
   isLastTransactionDaysOption,
+  type RankingPreferences,
   isThrowHandQueryValue,
+  type TransactionTypeFilter,
   type ThrowHand,
   parseExperienceLevelFilterInput,
 } from "@available-player-portal/shared"
 import { Router } from "express"
 import type { PlayerFilters } from "../types/models"
 import { PlayerDataService } from "../services/PlayerDataService"
+import { PlayerRepository } from "../repositories/PlayerRepository"
 import { TransactionRepository } from "../repositories/TransactionRepository"
 
 const playerData = new PlayerDataService()
+const playersRepo = new PlayerRepository()
 /** Single-table read for the dedicated transactions endpoint (no cross-repo join). */
 const transactions = new TransactionRepository()
 
@@ -36,6 +40,55 @@ function firstString(q: unknown): string | undefined {
   if (typeof q === "string") return q
   if (Array.isArray(q) && typeof q[0] === "string") return q[0]
   return undefined
+}
+
+function parseTransactionTypesQuery(query: Record<string, unknown>): TransactionTypeFilter[] | undefined {
+  const raw = firstString(query.transactionTypes)
+  if (raw == null || raw.trim() === "") return undefined
+  const values = raw
+    .split(",")
+    .map((v) => v.trim().toLowerCase())
+    .filter(Boolean)
+  const out: TransactionTypeFilter[] = []
+  for (const v of values) {
+    if (v === "retired") out.push("retired")
+    else if (v === "released") out.push("released")
+    else if (v === "freeagent" || v === "free_agent" || v === "free-agent") out.push("freeAgent")
+    else throw new Error("Invalid transactionTypes")
+  }
+  return out.length ? [...new Set(out)] : undefined
+}
+
+function parseRankingPreferencesQuery(query: Record<string, unknown>): RankingPreferences | undefined {
+  const perfRaw = firstString(query.rankWPerf)
+  const expRaw = firstString(query.rankWExp)
+  const posRaw = firstString(query.rankWPos)
+  const availRaw = firstString(query.rankWAvail)
+  const txRaw = firstString(query.rankWTx)
+  const raws = [perfRaw, expRaw, posRaw, availRaw, txRaw]
+  if (raws.every((r) => r == null || r.trim() === "")) return undefined
+  const perf = Number(perfRaw)
+  const exp = Number(expRaw)
+  const pos = Number(posRaw)
+  const avail = Number(availRaw)
+  const tx = Number(txRaw)
+  const nums = [perf, exp, pos, avail, tx]
+  if (nums.some((n) => !Number.isFinite(n) || n < 0 || n > 1)) {
+    throw new Error("Invalid ranking weights")
+  }
+  const sum = perf + exp + pos + avail + tx
+  if (Math.abs(sum - 1) > 0.00001) throw new Error("Invalid ranking weights")
+  const targetPosition = firstString(query.rankTargetPosition)?.trim()
+  return {
+    weights: {
+      performance: perf,
+      experience: exp,
+      positionMatch: pos,
+      availability: avail,
+      recentTransactions: tx,
+    },
+    targetPosition: targetPosition || undefined,
+  }
 }
 
 /** Maps `req.query` into {@link PlayerFilters}; throws if `ageMin`/`ageMax` are invalid. */
@@ -87,16 +140,21 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     }
   }
 
-  const { value: experienceLevel, invalidRaw: exactInvalid } = parseExactExperienceLevelQuery(query)
+  const { value: experienceLevel, invalidRaw: exactInvalid } = parseMaxExperienceLevelQuery(query)
 
   if (exactInvalid) {
     throw new Error(`Invalid experienceLevel: ${exactInvalid}`)
+  }
+  const { value: experienceLevelMin, invalidRaw: minInvalid } = parseMinExperienceLevelQuery(query)
+  if (minInvalid) {
+    throw new Error(`Invalid experienceLevelMin: ${minInvalid}`)
   }
 
   let sortBy: PlayerFilters["sortBy"]
   const sortByRaw = firstString(query.sortBy)?.trim().toLowerCase()
   if (sortByRaw != null && sortByRaw !== "") {
     if (sortByRaw === "name") sortBy = "name"
+    else if (sortByRaw === "lastname" || sortByRaw === "last_name") sortBy = "lastName"
     else if (
       sortByRaw === "experiencelevel" ||
       sortByRaw === "experience_level" ||
@@ -111,6 +169,8 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
       sortByRaw === "updates"
     ) {
       sortBy = "recentProfileTransaction"
+    } else if (sortByRaw === "rankscore" || sortByRaw === "rank_score" || sortByRaw === "ranking") {
+      sortBy = "rankScore"
     } else {
       throw new Error("Invalid sortBy")
     }
@@ -151,6 +211,8 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     if (!isThrowHandQueryValue(throwsRaw)) throw new Error("Invalid throws")
     throws = throwsRaw.trim().toUpperCase() as ThrowHand
   }
+  const transactionTypes = parseTransactionTypesQuery(query)
+  const rankingPreferences = parseRankingPreferencesQuery(query)
 
   return {
     position,
@@ -159,23 +221,41 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     ageMin,
     ageMax,
     experienceLevel,
+    experienceLevelMin,
     hasStats,
     limit,
     offset,
     sortBy,
     sortDir,
     lastTransactionDays,
+    transactionTypes,
     bats,
     throws,
+    rankingPreferences,
   }
 }
 
-function parseExactExperienceLevelQuery(query: Record<string, unknown>): {
+function parseMaxExperienceLevelQuery(query: Record<string, unknown>): {
   value: string | undefined
   invalidRaw: string | undefined
 } {
   // Same filter; multiple keys for HTTP clients (camelCase, snake_case, TBC-style).
-  const keys = ["experienceLevel", "experience_level", "highlevel", "highLevel"] as const
+  const keys = ["experienceLevel", "experience_level", "highlevel", "highLevel", "experienceLevelMax"] as const
+  for (const key of keys) {
+    const raw = firstString(query[key])
+    if (raw == null || raw.trim() === "") continue
+    const parsed = parseExperienceLevelFilterInput(raw)
+    if (parsed) return { value: parsed, invalidRaw: undefined }
+    return { value: undefined, invalidRaw: raw }
+  }
+  return { value: undefined, invalidRaw: undefined }
+}
+
+function parseMinExperienceLevelQuery(query: Record<string, unknown>): {
+  value: string | undefined
+  invalidRaw: string | undefined
+} {
+  const keys = ["experienceLevelMin", "experience_level_min", "minExperienceLevel", "minlevel", "min_level"] as const
   for (const key of keys) {
     const raw = firstString(query[key])
     if (raw == null || raw.trim() === "") continue
@@ -208,6 +288,11 @@ export function createPlayerRouter(): Router {
   r.get("/:id/transactions", async (req, res, next) => {
     try {
       const { id } = req.params
+      const portal = await playersRepo.getPlayerById(id)
+      if (!portal) {
+        res.status(404).json({ error: "Player not found" })
+        return
+      }
       const list = await transactions.getTransactionsByPlayer(id)
       res.json(list)
     } catch (e) {

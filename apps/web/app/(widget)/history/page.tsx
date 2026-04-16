@@ -52,7 +52,7 @@ export default function HistoryPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-black">History</h1>
           <p className="mt-1 text-sm text-neutral-600">
-            Players you open are tracked here in recent-to-oldest order (this browser only).
+            Players you open are tracked here in recent-to-oldest order.
           </p>
         </div>
         {entries.length > 0 ? (
