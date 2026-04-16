@@ -1,9 +1,20 @@
 {
   "name": "@available-player-portal/shared",
   "private": true,
-  "main": "./types/index.ts",
+  "main": "./dist/index.js",
   "types": "./types/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "echo \"no linter configured\""
+  },
   "exports": {
-    ".": "./types/index.ts"
+    ".": {
+      "types": "./types/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
   }
 }

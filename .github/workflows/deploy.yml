@@ -1,0 +1,99 @@
+name: Deploy Player Portal to Lambda
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-2
+  API_ECR_REPO: player-portal-api
+  WEB_ECR_REPO: player-portal-web
+  NEXT_PUBLIC_API_URL: https://www.alpb-analytics.com/widgets/player-portal/api
+  NEXT_PUBLIC_BASE_PATH: /widgets/player-portal
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    name: Build, Push, and Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: player-portal-deploy
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push API image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker buildx build \
+            --provenance=false \
+            -f docker/Dockerfile.api \
+            -t "$ECR_REGISTRY/${{ env.API_ECR_REPO }}:${{ env.IMAGE_TAG }}" \
+            -t "$ECR_REGISTRY/${{ env.API_ECR_REPO }}:latest" \
+            --push \
+            .
+
+      - name: Build and push Web image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker buildx build \
+            --provenance=false \
+            -f docker/Dockerfile.web \
+            --build-arg "NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }}" \
+            --build-arg "NEXT_PUBLIC_BASE_PATH=${{ env.NEXT_PUBLIC_BASE_PATH }}" \
+            -t "$ECR_REGISTRY/${{ env.WEB_ECR_REPO }}:${{ env.IMAGE_TAG }}" \
+            -t "$ECR_REGISTRY/${{ env.WEB_ECR_REPO }}:latest" \
+            --push \
+            .
+
+      - name: Update Lambda function code
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          aws lambda update-function-code \
+            --function-name player-portal-api \
+            --image-uri "$ECR_REGISTRY/${{ env.API_ECR_REPO }}:${{ env.IMAGE_TAG }}" \
+            --architectures x86_64
+
+          aws lambda update-function-code \
+            --function-name player-portal-web \
+            --image-uri "$ECR_REGISTRY/${{ env.WEB_ECR_REPO }}:${{ env.IMAGE_TAG }}" \
+            --architectures x86_64
+
+          aws lambda update-function-code \
+            --function-name player-portal-sync \
+            --image-uri "$ECR_REGISTRY/${{ env.API_ECR_REPO }}:${{ env.IMAGE_TAG }}" \
+            --architectures x86_64
+
+      - name: Wait for Lambda updates to complete
+        run: |
+          aws lambda wait function-updated --function-name player-portal-api
+          aws lambda wait function-updated --function-name player-portal-web
+          aws lambda wait function-updated --function-name player-portal-sync
+
+      - name: Smoke test API health endpoint
+        run: |
+          sleep 5
+          curl --http1.1 --fail --silent --show-error \
+            "https://www.alpb-analytics.com/widgets/player-portal/api/health"
+          echo "API health check passed."

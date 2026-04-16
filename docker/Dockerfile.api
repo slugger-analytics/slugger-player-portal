@@ -1,2 +1,77 @@
-# TODO
+# Express API image for AWS Lambda (arm64)
+# Serves: player-portal-api Lambda (CMD: node dist/index.js)
+#         player-portal-sync Lambda (CMD overridden via Terraform image_config to node dist/jobs/syncPipeline.js)
+#
+# Build context: monorepo root (not apps/api)
+# Usage: docker buildx build --platform linux/arm64 -f docker/Dockerfile.api -t player-portal-api:latest .
 
+# ─── Stage 1: Install deps and compile ───────────────────────────────────────
+FROM node:22-alpine AS builder
+WORKDIR /app
+
+ENV NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
+
+# Copy workspace manifests first for layer caching
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/
+COPY packages/shared/package.json ./packages/shared/
+
+# Install all deps (dev included — needed for tsc and prisma CLI)
+RUN npm ci
+
+# Copy source
+COPY packages/shared/ ./packages/shared/
+COPY apps/api/ ./apps/api/
+
+# Build shared package so the API can import its compiled JS at runtime
+RUN npm run build -w @available-player-portal/shared
+
+# Generate Prisma client (type stubs for tsc; platform binary regenerated in runner)
+RUN cd apps/api && npx prisma generate
+
+# Compile TypeScript → dist/
+RUN npm run build -w @available-player-portal/api
+
+# ─── Stage 2: Lambda Web Adapter binary ──────────────────────────────────────
+FROM public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 AS lwa
+
+# ─── Stage 3: Production image ────────────────────────────────────────────────
+FROM node:22-alpine AS runner
+WORKDIR /app
+
+# Lambda Web Adapter intercepts Lambda invocation events and forwards them as
+# HTTP requests to the Express server on port 8080
+COPY --from=lwa /lambda-adapter /opt/extensions/lambda-adapter
+
+ENV NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000
+
+# Copy workspace manifests for production npm ci
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/
+COPY packages/shared/package.json ./packages/shared/
+
+# Copy shared source + compiled dist so the workspace symlink resolves to JS at runtime
+# (packages/shared/main points to ./dist/index.js)
+COPY packages/shared/types ./packages/shared/types
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+
+# Copy Prisma schema (required by prisma generate)
+COPY apps/api/prisma ./apps/api/prisma
+
+# Install production deps and generate the arm64 Prisma engine binary for this platform
+RUN npm ci --omit=dev && cd apps/api && npx prisma generate
+
+# Copy compiled API from builder
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+
+ENV PORT=8080 \
+    NODE_ENV=production
+
+EXPOSE 8080
+
+WORKDIR /app/apps/api
+CMD ["node", "dist/index.js"]
