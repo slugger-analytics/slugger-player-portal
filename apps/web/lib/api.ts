@@ -22,7 +22,7 @@ export function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
     return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
   }
-  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
+  return process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
 }
 
 /** Builds `?a=1&b=2` from a params object; omits undefined, empty strings, and `false`. */

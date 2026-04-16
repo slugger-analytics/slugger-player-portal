@@ -1,7 +1,5 @@
 // PURPOSE: Next.js 14+ configuration (App Router, images, env).
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  // Add config as needed (images, env, etc.)
-};
+const nextConfig = {};
 
-module.exports = nextConfig;
+export default nextConfig;
