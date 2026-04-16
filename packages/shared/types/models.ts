@@ -154,6 +154,8 @@ export interface PlayerSummary {
   imageUrl?: string | null
   /** Latest calendar date among profile-visible transactions (retired / released / FA); null if none. */
   mostRecentTransactionDate?: string | null
+  /** Type for {@link mostRecentTransactionDate}; null when no profile-visible transaction. */
+  mostRecentTransactionType?: string | null
   rankScore?: number | null
   /** 1-based position when ordering by rank score (best = 1) among the current filter set. */
   rankOrdinal?: number | null

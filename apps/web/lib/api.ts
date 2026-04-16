@@ -95,6 +95,7 @@ export async function fetchPlayerSummaryForCard(id: string): Promise<PlayerSumma
     mostRecentTeam: p.team,
     imageUrl: null,
     mostRecentTransactionDate: profile.mostRecentTransactionDate ?? null,
+    mostRecentTransactionType: profile.transactions[0]?.type ?? null,
   }
 }
 
