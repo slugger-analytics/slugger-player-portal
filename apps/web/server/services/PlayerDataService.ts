@@ -68,13 +68,15 @@ export class PlayerDataService {
     ])
     if (list.length === 0) return { players: [], total }
     const ids = list.map((p) => p.id)
-    const txMaxById = await this.transactions.getMaxTransactionDatesByPlayerIds(ids)
+    const recentTxById = await this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids, filters.transactionTypes)
     const players: PlayerSummary[] = []
     for (const p of list) {
       const base = await this.buildPlayerSummaryStatsOnly(p)
+      const tx = recentTxById.get(p.id)
       players.push({
         ...base,
-        mostRecentTransactionDate: txMaxById.get(p.id) ?? null,
+        mostRecentTransactionDate: tx?.date ?? null,
+        mostRecentTransactionType: tx?.type ?? null,
       })
     }
     return { players, total }
@@ -96,6 +98,17 @@ export class PlayerDataService {
   private isPitcherPosition(position: string): boolean {
     const pos = position.trim().toLowerCase()
     return pos === "p" || pos.startsWith("p-") || pos.includes("pitch")
+  }
+
+  private currentTeamFromStats(
+    fallbackTeam: string,
+    battingStats: BattingStats[],
+    pitchingStats: PitchingStats[],
+    position: string,
+  ): string {
+    const preferred = pickStatArrayForLine(battingStats, pitchingStats, position)
+    const team = [...preferred, ...battingStats, ...pitchingStats].find((row) => (row.teamName ?? "").trim().length > 0)?.teamName
+    return team?.trim() || fallbackTeam
   }
 
   /**
@@ -205,24 +218,25 @@ export class PlayerDataService {
       this.pitching.getStatsByPlayerIds(ids),
       this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids),
     ])
-    const txMaxById = await this.transactions.getMaxTransactionDatesByPlayerIds(ids)
     const players: PlayerSummary[] = []
     const rankingInput = list.map((p) => {
       const batting = battingById.get(p.id) ?? []
       const pitching = pitchingById.get(p.id) ?? []
       const recentTx = txById.get(p.id)
       const arr = pickStatArrayForLine(batting, pitching, p.position)
+      const currentTeam = this.currentTeamFromStats(p.team, batting, pitching, p.position)
       players.push({
         id: p.id,
         name: p.name,
         position: p.position,
-        team: p.team,
+        team: currentTeam,
         status: p.status,
         experienceLevel: p.experienceLevel ?? null,
         minimalStatLine: this.statLine.generateMinimalStatLine(arr),
-        mostRecentTeam: p.team,
+        mostRecentTeam: currentTeam,
         imageUrl: null,
-        mostRecentTransactionDate: txMaxById.get(p.id) ?? null,
+        mostRecentTransactionDate: recentTx?.date ?? null,
+        mostRecentTransactionType: recentTx?.type ?? null,
       })
       const isPitcher = this.isPitcherPosition(p.position ?? "")
       const mostRecentBatting = batting[0]
@@ -319,13 +333,15 @@ export class PlayerDataService {
             filters,
           )
         : undefined
-    const txMaxById = await this.transactions.getMaxTransactionDatesByPlayerIds(list.map((p) => p.id))
+    const recentTxById = await this.transactions.getMostRecentProfileTransactionsByPlayerIds(list.map((p) => p.id))
     const players: PlayerSummary[] = []
     for (const p of list) {
       const base = await this.buildPlayerSummaryStatsOnly(p)
+      const tx = recentTxById.get(p.id)
       const row: PlayerSummary = {
         ...base,
-        mostRecentTransactionDate: txMaxById.get(p.id) ?? null,
+        mostRecentTransactionDate: tx?.date ?? null,
+        mostRecentTransactionType: tx?.type ?? null,
       }
       const meta = rankingMeta?.get(p.id)
       if (meta) {
@@ -353,26 +369,32 @@ export class PlayerDataService {
     const pitchingStats = await this.pitching.getStatsByPlayer(p.id)
     const arr = pickStatArrayForLine(battingStats, pitchingStats, p.position)
     const minimalStatLine = this.statLine.generateMinimalStatLine(arr)
+    const currentTeam = this.currentTeamFromStats(p.team, battingStats, pitchingStats, p.position)
     return {
       id: p.id,
       name: p.name,
       position: p.position,
-      team: p.team,
+      team: currentTeam,
       status: p.status,
       experienceLevel: p.experienceLevel ?? null,
       minimalStatLine,
-      mostRecentTeam: p.team,
+      mostRecentTeam: currentTeam,
       imageUrl: null,
     }
   }
 
   /** Shared implementation for list and single summary (avoids double-fetching by id). */
   private async buildPlayerSummaryInternal(p: Player): Promise<PlayerSummary> {
-    const [base, txMaxById] = await Promise.all([
+    const [base, recentTxById] = await Promise.all([
       this.buildPlayerSummaryStatsOnly(p),
-      this.transactions.getMaxTransactionDatesByPlayerIds([p.id]),
+      this.transactions.getMostRecentProfileTransactionsByPlayerIds([p.id]),
     ])
-    return { ...base, mostRecentTransactionDate: txMaxById.get(p.id) ?? null }
+    const tx = recentTxById.get(p.id)
+    return {
+      ...base,
+      mostRecentTransactionDate: tx?.date ?? null,
+      mostRecentTransactionType: tx?.type ?? null,
+    }
   }
 
   /**

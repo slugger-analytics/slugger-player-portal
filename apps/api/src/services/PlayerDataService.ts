@@ -87,6 +87,17 @@ export class PlayerDataService {
     return pos === "p" || pos.startsWith("p-") || pos.includes("pitch")
   }
 
+  private currentTeamFromStats(
+    fallbackTeam: string,
+    battingStats: BattingStats[],
+    pitchingStats: PitchingStats[],
+    position: string,
+  ): string {
+    const preferred = pickStatArrayForLine(battingStats, pitchingStats, position)
+    const team = [...preferred, ...battingStats, ...pitchingStats].find((row) => (row.teamName ?? "").trim().length > 0)?.teamName
+    return team?.trim() || fallbackTeam
+  }
+
   private async getRankingMetaByPlayerId(
     list: Player[],
     filters: PlayerFilters,
@@ -316,35 +327,39 @@ export class PlayerDataService {
 
   /** Shared implementation for list and single summary (avoids double-fetching by id). */
   private async buildPlayerSummaryInternal(p: Player): Promise<PlayerSummary> {
-    const [battingStats, pitchingStats, txMaxById] = await Promise.all([
+    const [battingStats, pitchingStats, recentTxById] = await Promise.all([
       this.batting.getStatsByPlayer(p.id),
       this.pitching.getStatsByPlayer(p.id),
-      this.transactions.getMaxTransactionDatesByPlayerIds([p.id]),
+      this.transactions.getMostRecentProfileTransactionsByPlayerIds([p.id]),
     ])
+    const tx = recentTxById.get(p.id)
     return this.playerSummaryFromStats(
       p,
       battingStats,
       pitchingStats,
-      txMaxById.get(p.id) ?? null,
+      tx?.date ?? null,
+      tx?.type ?? null,
     )
   }
 
   private async buildPlayerSummariesBatch(list: Player[]): Promise<PlayerSummary[]> {
     if (list.length === 0) return []
     const ids = list.map((p) => p.id)
-    const [battingById, pitchingById, txMaxById] = await Promise.all([
+    const [battingById, pitchingById, recentTxById] = await Promise.all([
       this.batting.getStatsByPlayerIds(ids),
       this.pitching.getStatsByPlayerIds(ids),
-      this.transactions.getMaxTransactionDatesByPlayerIds(ids),
+      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids),
     ])
-    return list.map((p) =>
-      this.playerSummaryFromStats(
+    return list.map((p) => {
+      const tx = recentTxById.get(p.id)
+      return this.playerSummaryFromStats(
         p,
         battingById.get(p.id) ?? [],
         pitchingById.get(p.id) ?? [],
-        txMaxById.get(p.id) ?? null,
-      ),
-    )
+        tx?.date ?? null,
+        tx?.type ?? null,
+      )
+    })
   }
 
   private playerSummaryFromStats(
@@ -352,20 +367,23 @@ export class PlayerDataService {
     battingStats: BattingStats[],
     pitchingStats: PitchingStats[],
     mostRecentTransactionDate: string | null,
+    mostRecentTransactionType: string | null,
   ): PlayerSummary {
     const arr = pickStatArrayForLine(battingStats, pitchingStats, p.position)
     const minimalStatLine = this.statLine.generateMinimalStatLine(arr)
+    const currentTeam = this.currentTeamFromStats(p.team, battingStats, pitchingStats, p.position)
     return {
       id: p.id,
       name: p.name,
       position: p.position,
-      team: p.team,
+      team: currentTeam,
       status: p.status,
       experienceLevel: p.experienceLevel ?? null,
       minimalStatLine,
-      mostRecentTeam: p.team,
+      mostRecentTeam: currentTeam,
       imageUrl: null,
       mostRecentTransactionDate,
+      mostRecentTransactionType,
     }
   }
 
