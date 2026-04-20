@@ -160,21 +160,16 @@ export function FilterModal({
   const canSave = isPreferenceComplete()
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 p-4 backdrop-blur-[2px]"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="filter-modal-title"
-    >
-      <div className="w-full max-w-md rounded-portal border border-portal-filter-border bg-portal-surface p-5 shadow-portal">
+    <div className="portal-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="filter-modal-title">
+      <div className="portal-modal-card max-w-md">
         <h2 id="filter-modal-title" className="text-lg font-bold text-black dark:text-neutral-100">
           {state.mode === "edit" ? "Edit preference" : "Add preference"}
         </h2>
         <div className="mt-4 space-y-3">
-          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+          <label className="portal-field">
             Type
             <select
-              className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+              className="portal-control"
               value={kind}
               onChange={(e) => setKind(e.target.value as FilterKind)}
             >
@@ -187,10 +182,10 @@ export function FilterModal({
           </label>
 
           {kind === "position" ? (
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+            <label className="portal-field">
               Position
               <select
-                className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                className="portal-control"
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
               >
@@ -210,10 +205,10 @@ export function FilterModal({
           ) : null}
 
           {kind === "team" ? (
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+            <label className="portal-field">
               Team
               <input
-                className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                className="portal-control"
                 value={team}
                 onChange={(e) => setTeam(e.target.value)}
                 placeholder="e.g. Yankees"
@@ -222,10 +217,10 @@ export function FilterModal({
           ) : null}
 
           {kind === "status" ? (
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+            <label className="portal-field">
               Status
               <select
-                className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                className="portal-control"
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
               >
@@ -241,10 +236,10 @@ export function FilterModal({
 
           {kind === "experienceLevel" ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              <label className="portal-field">
                 Min experience level
                 <select
-                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                  className="portal-control"
                   value={expMin}
                   onChange={(e) => setExpMin(e.target.value)}
                 >
@@ -256,10 +251,10 @@ export function FilterModal({
                   ))}
                 </select>
               </label>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              <label className="portal-field">
                 Max experience level
                 <select
-                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                  className="portal-control"
                   value={expMax}
                   onChange={(e) => setExpMax(e.target.value)}
                 >
@@ -275,10 +270,10 @@ export function FilterModal({
           ) : null}
 
           {kind === "lastTransactionDays" ? (
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+            <label className="portal-field">
               Last X days
               <select
-                className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                className="portal-control"
                 value={lastTxDays}
                 onChange={(e) => setLastTxDays(e.target.value)}
               >
@@ -300,10 +295,10 @@ export function FilterModal({
 
           {kind === "handedness" ? (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              <label className="portal-field">
                 Batting
                 <select
-                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                  className="portal-control"
                   value={batHand}
                   onChange={(e) => setBatHand(e.target.value)}
                 >
@@ -313,10 +308,10 @@ export function FilterModal({
                   <option value="B">B</option>
                 </select>
               </label>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              <label className="portal-field">
                 Throwing
                 <select
-                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                  className="portal-control"
                   value={throwHand}
                   onChange={(e) => setThrowHand(e.target.value)}
                 >
@@ -330,10 +325,10 @@ export function FilterModal({
 
           {kind === "age" ? (
             <div className="grid grid-cols-2 gap-3">
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              <label className="portal-field">
                 Compare
                 <select
-                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                  className="portal-control"
                   value={ageMode}
                   onChange={(e) => setAgeMode(e.target.value as "lt" | "gt")}
                 >
@@ -341,10 +336,10 @@ export function FilterModal({
                   <option value="gt">Greater than</option>
                 </select>
               </label>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+              <label className="portal-field">
                 Age
                 <input
-                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm shadow-sm focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600"
+                  className="portal-control"
                   value={ageValue}
                   onChange={(e) => setAgeValue(e.target.value)}
                   inputMode="numeric"

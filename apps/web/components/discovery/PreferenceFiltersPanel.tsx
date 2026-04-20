@@ -81,13 +81,13 @@ export function PreferenceFiltersPanel({ filters, onFiltersChange, onlyWithStats
                 {menuFor === f.id ? (
                   <div
                     data-filter-menu
-                    className="absolute right-2 top-[calc(100%+4px)] z-20 w-40 overflow-hidden rounded-portal-sm border border-neutral-200/90 bg-portal-surface py-1 shadow-portal dark:border-neutral-600/80"
+                    className="portal-menu absolute right-2 top-[calc(100%+4px)] z-20 w-40"
                     role="menu"
                   >
                     <button
                       type="button"
                       role="menuitem"
-                      className="block w-full px-3 py-2.5 text-left text-sm text-neutral-800 hover:bg-portal-filter-bg dark:text-neutral-100 dark:hover:bg-neutral-800/60"
+                      className="portal-menu-item"
                       onClick={() => {
                         setModal({ mode: "edit", filter: f })
                         setMenuFor(null)
@@ -98,7 +98,7 @@ export function PreferenceFiltersPanel({ filters, onFiltersChange, onlyWithStats
                     <button
                       type="button"
                       role="menuitem"
-                      className="block w-full px-3 py-2.5 text-left text-sm text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                      className="portal-menu-item-danger"
                       onClick={() => removeFilter(f.id)}
                     >
                       Remove
@@ -115,7 +115,7 @@ export function PreferenceFiltersPanel({ filters, onFiltersChange, onlyWithStats
             type="checkbox"
             checked={onlyWithStats}
             onChange={(e) => onOnlyWithStatsChange(e.target.checked)}
-            className="h-4 w-4 shrink-0 rounded border-neutral-300 text-portal-accent focus:ring-portal-accent"
+            className="portal-checkbox"
           />
           <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">Stats Available</span>
         </label>
@@ -129,7 +129,7 @@ export function PreferenceFiltersPanel({ filters, onFiltersChange, onlyWithStats
           aria-controls="add-preferences-menu"
           id="add-preferences-button"
           onClick={() => setAddPrefsOpen((o) => !o)}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-portal-sm border border-portal-filter-border bg-portal-surface px-4 text-sm font-semibold text-[#4A5F78] shadow-portal-card transition hover:border-portal-accent hover:bg-portal-filter-bg/60 dark:text-portal-accent"
+          className="portal-btn-secondary h-11 w-full"
         >
           <Plus className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
           Add preferences
@@ -143,14 +143,14 @@ export function PreferenceFiltersPanel({ filters, onFiltersChange, onlyWithStats
             id="add-preferences-menu"
             role="listbox"
             aria-labelledby="add-preferences-button"
-            className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-portal-sm border border-neutral-200/90 bg-portal-surface py-1 shadow-portal dark:border-neutral-600/80"
+            className="portal-menu absolute left-0 right-0 top-[calc(100%+6px)] z-30"
           >
             {ADD_PREFERENCE_OPTIONS.map(({ kind, label }) => (
               <li key={kind} role="none">
                 <button
                   type="button"
                   role="option"
-                  className="block w-full px-3 py-2.5 text-left text-sm text-neutral-800 hover:bg-portal-filter-bg dark:text-neutral-100 dark:hover:bg-neutral-800/60"
+                  className="portal-menu-item"
                   onClick={() => {
                     setAddPrefsOpen(false)
                     setModal({ mode: "add", presetKind: kind })

@@ -376,52 +376,46 @@ export default function PlayerDiscoveryHomePage() {
   }
 
   return (
-    <main className="px-4 pb-10 sm:px-5">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <h1 className="text-3xl font-bold tracking-tight text-black dark:text-neutral-100">Player Discovery Home</h1>
+    <main className="portal-page">
+      <header className="portal-page-header">
+        <div className="portal-title-stack">
+          <h1 className="text-3xl font-bold tracking-tight text-black dark:text-neutral-100">Player Discovery Home</h1>
+        </div>
         <button
           type="button"
           onClick={handleRefreshDatabase}
           disabled={syncing}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-portal-sm border border-portal-filter-border bg-portal-surface px-4 py-2.5 text-sm font-semibold text-[#4A5F78] shadow-portal-card transition hover:border-portal-accent hover:bg-portal-filter-bg/60 disabled:cursor-not-allowed disabled:opacity-60 dark:text-portal-accent"
+          className="portal-btn-secondary shrink-0"
           title="Fetch latest Baseball Cube feeds, parse, and upsert into PostgreSQL"
         >
           <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} aria-hidden />
           {syncing ? "Refreshing…" : "Refresh database"}
         </button>
-      </div>
+      </header>
 
       {syncBanner ? (
         <div
           role="status"
-          className={`mb-6 rounded-portal-sm border px-3 py-3 text-sm leading-relaxed ${
+          className={`rounded-portal-sm border px-4 py-3 text-sm leading-relaxed ${
             syncBanner.variant === "success"
-              ? "border-emerald-200/90 bg-emerald-50/90 text-emerald-950"
-              : "border-red-200/90 bg-red-50/90 text-red-950"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-800/60 dark:bg-emerald-950/50 dark:text-emerald-100"
+              : "border-red-200 bg-red-50 text-red-950 dark:border-red-900/50 dark:bg-red-950/45 dark:text-red-100"
           }`}
         >
           {syncBanner.text}
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-5">
-        <section className="w-full shrink-0 lg:w-[420px] lg:flex-shrink-0">
-          <div
-            className="mb-3 flex gap-1 rounded-portal-sm border border-portal-filter-border bg-portal-filter-bg/60 p-1 dark:border-neutral-600/60"
-            role="tablist"
-            aria-label="Search source"
-          >
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-6">
+        <section className="flex w-full shrink-0 flex-col gap-4 lg:w-[420px] lg:flex-shrink-0">
+          <div className="portal-tablist" role="tablist" aria-label="Search source">
             <button
               type="button"
               role="tab"
               aria-selected={searchMode === "custom"}
               aria-current={searchMode === "custom" ? "true" : undefined}
               onClick={() => setSearchMode("custom")}
-              className={`relative flex-1 rounded-portal-sm px-3 py-2.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-portal-accent focus-visible:ring-offset-2 focus-visible:ring-offset-portal-filter-bg dark:focus-visible:ring-offset-neutral-900 ${
-                searchMode === "custom"
-                  ? "bg-portal-surface font-bold text-[#4A5F78] shadow-portal-card ring-2 ring-portal-accent dark:bg-neutral-800 dark:text-portal-accent dark:ring-portal-accent"
-                  : "font-medium text-neutral-500 hover:bg-white/70 hover:text-neutral-800 dark:text-neutral-500 dark:hover:bg-neutral-800/60 dark:hover:text-neutral-200"
-              }`}
+              className={`portal-tab ${searchMode === "custom" ? "portal-tab-active" : "portal-tab-inactive"}`}
             >
               Custom search
             </button>
@@ -431,57 +425,58 @@ export default function PlayerDiscoveryHomePage() {
               aria-selected={searchMode === "profile"}
               aria-current={searchMode === "profile" ? "true" : undefined}
               onClick={() => setSearchMode("profile")}
-              className={`relative flex-1 rounded-portal-sm px-3 py-2.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-portal-accent focus-visible:ring-offset-2 focus-visible:ring-offset-portal-filter-bg dark:focus-visible:ring-offset-neutral-900 ${
-                searchMode === "profile"
-                  ? "bg-portal-surface font-bold text-[#4A5F78] shadow-portal-card ring-2 ring-portal-accent dark:bg-neutral-800 dark:text-portal-accent dark:ring-portal-accent"
-                  : "font-medium text-neutral-500 hover:bg-white/70 hover:text-neutral-800 dark:text-neutral-500 dark:hover:bg-neutral-800/60 dark:hover:text-neutral-200"
-              }`}
+              className={`portal-tab ${searchMode === "profile" ? "portal-tab-active" : "portal-tab-inactive"}`}
             >
               Saved profile
             </button>
           </div>
 
-          <label className="mb-3 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-            Sort results
-            <select
-              value={sort}
-              onChange={(e) => {
-                const next = e.target.value as DiscoverySortOption
-                if (next === "ranking" && !hasRankingPreferencesConfigured) {
-                  openRankingModal()
-                  return
-                }
-                setSort(next)
-                if (next === "transactionType") setTransactionTypeModalOpen(true)
-              }}
-              className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm text-neutral-900 focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600 dark:text-neutral-100"
-            >
-              <option value="newestTransaction">Newest transactions (default)</option>
-              <option value="lastName">Last name</option>
-              <option value="transactionType">Transaction type</option>
-              <option value="ranking">Ranking score</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={openRankingModal}
-            className="mb-3 rounded-portal-sm border border-portal-filter-border bg-portal-surface px-3 py-2 text-sm font-medium text-[#4A5F78] shadow-portal-card hover:border-portal-accent dark:text-portal-accent"
-          >
-            {hasRankingPreferencesConfigured ? "Ranking preferences: Set" : "Set ranking preferences"}
-          </button>
-          {sort === "transactionType" ? (
+          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            Sort &amp; order
+          </p>
+          <div className="portal-filter-shell space-y-3 sm:p-5">
+            <label className="portal-field">
+              Sort results
+              <select
+                value={sort}
+                onChange={(e) => {
+                  const next = e.target.value as DiscoverySortOption
+                  if (next === "ranking" && !hasRankingPreferencesConfigured) {
+                    openRankingModal()
+                    return
+                  }
+                  setSort(next)
+                  if (next === "transactionType") setTransactionTypeModalOpen(true)
+                }}
+                className="portal-control"
+              >
+                <option value="newestTransaction">Newest transactions (default)</option>
+                <option value="lastName">Last name</option>
+                <option value="transactionType">Transaction type</option>
+                <option value="ranking">Ranking score</option>
+              </select>
+            </label>
             <button
               type="button"
-              onClick={() => setTransactionTypeModalOpen(true)}
-              className="mb-3 rounded-portal-sm border border-portal-filter-border bg-portal-surface px-3 py-2 text-sm font-medium text-[#4A5F78] shadow-portal-card hover:border-portal-accent dark:text-portal-accent"
+              onClick={openRankingModal}
+              className="portal-btn-secondary w-full"
             >
-              Choose transaction types ({transactionTypes.length} selected)
+              {hasRankingPreferencesConfigured ? "Ranking preferences: Set" : "Set ranking preferences"}
             </button>
-          ) : null}
+            {sort === "transactionType" ? (
+              <button
+                type="button"
+                onClick={() => setTransactionTypeModalOpen(true)}
+                className="portal-btn-secondary w-full"
+              >
+                Choose transaction types ({transactionTypes.length} selected)
+              </button>
+            ) : null}
+          </div>
 
           {searchMode === "custom" ? (
-            <>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            <div className="flex flex-col gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                 Custom preferences
               </p>
               <PreferenceFiltersPanel
@@ -490,28 +485,28 @@ export default function PlayerDiscoveryHomePage() {
                 onlyWithStats={customOnlyWithStats}
                 onOnlyWithStatsChange={setCustomOnlyWithStats}
               />
-            </>
+            </div>
           ) : (
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            <div className="flex flex-col gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                 Saved profile
               </p>
               {profiles.length === 0 ? (
                 <div className="rounded-portal-sm border border-dashed border-portal-filter-border bg-portal-surface px-3 py-4 text-sm leading-relaxed text-neutral-600 dark:border-neutral-600 dark:text-neutral-400">
                   No profiles yet.{" "}
-                  <Link href="/preferences" className="font-semibold text-[#4A5F78] underline dark:text-portal-accent">
+                  <Link href="/preferences" className="portal-link text-sm">
                     Create profiles in Preferences
                   </Link>{" "}
                   with the search fields you want, then return here.
                 </div>
               ) : (
-                <>
-                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                <div className="flex flex-col gap-3">
+                  <label className="portal-field">
                     Profile
                     <select
                       value={selectedProfileId}
                       onChange={(e) => setSelectedProfileId(e.target.value)}
-                      className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm text-neutral-900 focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-portal-accent/25 dark:border-neutral-600 dark:text-neutral-100"
+                      className="portal-control"
                     >
                       {profiles.map((p) => (
                         <option key={p.id} value={p.id}>
@@ -521,27 +516,27 @@ export default function PlayerDiscoveryHomePage() {
                     </select>
                   </label>
                   {selectedProfile ? (
-                    <p className="mt-2 text-xs leading-relaxed text-neutral-500 dark:text-neutral-500">
+                    <p className="text-xs leading-relaxed text-neutral-500 dark:text-neutral-500">
                       {selectedProfile.filters.length === 0
                         ? "No row filters · "
                         : `${selectedProfile.filters.length} preference row(s) · `}
                       {selectedProfile.onlyWithStats ? "Stats required" : "Stats optional"}
                     </p>
                   ) : null}
-                  <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-500">
-                    <Link href="/preferences" className="font-semibold text-[#4A5F78] underline dark:text-portal-accent">
+                  <p className="text-xs text-neutral-500 dark:text-neutral-500">
+                    <Link href="/preferences" className="portal-link text-sm">
                       Preferences
                     </Link>{" "}
                     — edit names and criteria
                   </p>
-                </>
+                </div>
               )}
             </div>
           )}
         </section>
 
         <section className="min-w-0 w-full flex-1 lg:min-w-0">
-          <div className="portal-panel-well min-h-[480px] w-full min-w-0">
+          <div className="portal-panel-well min-h-[480px] w-full min-w-0 sm:p-5">
             {loading ? (
               <div
                 className="grid grid-cols-2 gap-3 sm:gap-4"
@@ -565,7 +560,7 @@ export default function PlayerDiscoveryHomePage() {
                 ))}
               </div>
             ) : error ? (
-              <div className="rounded-portal-sm border border-amber-200/80 bg-amber-50/90 px-3 py-3 text-sm text-amber-950">
+              <div className="rounded-portal-sm border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
                 <p className="font-semibold">Could not load players</p>
                 <p className="mt-1 leading-relaxed text-amber-900/90">{error}</p>
               </div>
@@ -590,7 +585,7 @@ export default function PlayerDiscoveryHomePage() {
                     />
                   ))}
                 </div>
-                <div className="mt-5 flex flex-col items-stretch gap-3 border-t border-neutral-200/80 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="mt-6 flex flex-col items-stretch gap-4 border-t border-neutral-200/80 pt-5 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-center text-sm text-neutral-600 dark:text-neutral-400 sm:text-left">
                     <span className="font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
                       {players.length}
@@ -605,7 +600,7 @@ export default function PlayerDiscoveryHomePage() {
                         type="button"
                         onClick={() => void handleLoadMore()}
                         disabled={loading || loadingMore}
-                        className="inline-flex min-w-[7rem] shrink-0 items-center justify-center rounded-portal-sm border border-portal-filter-border bg-portal-surface px-4 py-2.5 text-sm font-semibold text-[#4A5F78] shadow-portal-card transition hover:border-portal-accent hover:bg-portal-filter-bg/60 disabled:cursor-not-allowed disabled:opacity-50 dark:text-portal-accent"
+                        className="portal-btn-secondary min-w-[7rem] shrink-0 disabled:opacity-50"
                       >
                         {loadingMore ? "Loading…" : "Load more"}
                       </button>
@@ -618,51 +613,66 @@ export default function PlayerDiscoveryHomePage() {
         </section>
       </div>
       {transactionTypeModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
-          <div className="w-full max-w-sm rounded-portal-sm border border-portal-filter-border bg-portal-surface p-4 shadow-portal">
-            <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">Transaction types</h3>
-            <p className="mt-1 text-xs text-neutral-500">Players are sorted by newest matching transaction.</p>
-            <div className="mt-3 space-y-2">
-              <label className="flex items-center gap-2 text-sm">
+        <div className="portal-modal-overlay px-4">
+          <div
+            className="portal-modal-card max-w-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tx-type-modal-title"
+          >
+            <h3
+              id="tx-type-modal-title"
+              className="text-base font-semibold text-neutral-900 dark:text-neutral-100"
+            >
+              Transaction types
+            </h3>
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+              Players are sorted by newest matching transaction.
+            </p>
+            <div className="portal-modal-inset mt-3 space-y-2">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-800 dark:text-neutral-200">
                 <input
                   type="checkbox"
                   checked={transactionTypes.includes("retired")}
                   onChange={() => toggleTransactionType("retired")}
+                  className="portal-checkbox"
                 />
                 Retired
               </label>
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-800 dark:text-neutral-200">
                 <input
                   type="checkbox"
                   checked={transactionTypes.includes("released")}
                   onChange={() => toggleTransactionType("released")}
+                  className="portal-checkbox"
                 />
                 Released
               </label>
-              <label className="flex items-center gap-2 text-sm">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-800 dark:text-neutral-200">
                 <input
                   type="checkbox"
                   checked={transactionTypes.includes("freeAgent")}
                   onChange={() => toggleTransactionType("freeAgent")}
+                  className="portal-checkbox"
                 />
                 Free agent
               </label>
             </div>
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
               <button
                 type="button"
                 onClick={() => {
                   setTransactionTypes(["retired", "released", "freeAgent"])
                   setTransactionTypeModalOpen(false)
                 }}
-                className="rounded-portal-sm border border-neutral-300 px-3 py-2 text-sm"
+                className="portal-btn-secondary-sm"
               >
                 Select all
               </button>
               <button
                 type="button"
                 onClick={() => setTransactionTypeModalOpen(false)}
-                className="rounded-portal-sm bg-portal-accent px-3 py-2 text-sm text-white"
+                className="portal-btn-primary"
               >
                 Done
               </button>
@@ -671,16 +681,25 @@ export default function PlayerDiscoveryHomePage() {
         </div>
       ) : null}
       {rankingModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 px-4">
-          <div className="w-full max-w-xl rounded-portal-sm border border-portal-filter-border bg-portal-surface p-4 shadow-portal">
-            <h3 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+        <div className="portal-modal-overlay px-4">
+          <div
+            className="portal-modal-card max-w-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ranking-modal-title"
+          >
+            <h3
+              id="ranking-modal-title"
+              className="text-base font-semibold text-neutral-900 dark:text-neutral-100"
+            >
               Set ranking preferences
             </h3>
-            <p className="mt-1 text-xs text-neutral-500">
+            <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
               Weights must add to 100%. Applies to {searchMode === "profile" ? "this saved profile" : "custom search"}.
             </p>
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="text-sm text-neutral-700 dark:text-neutral-300">
+            <div className="portal-modal-inset mt-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="portal-field">
                 Performance (%)
                 <input
                   type="number"
@@ -694,10 +713,10 @@ export default function PlayerDiscoveryHomePage() {
                     }))
                   }
                   placeholder="eg 30"
-                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2 text-sm dark:border-neutral-600"
+                  className="portal-control"
                 />
               </label>
-              <label className="text-sm text-neutral-700 dark:text-neutral-300">
+              <label className="portal-field">
                 Experience (%)
                 <input
                   type="number"
@@ -711,10 +730,10 @@ export default function PlayerDiscoveryHomePage() {
                     }))
                   }
                   placeholder="eg 20"
-                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2 text-sm dark:border-neutral-600"
+                  className="portal-control"
                 />
               </label>
-              <label className="text-sm text-neutral-700 dark:text-neutral-300">
+              <label className="portal-field">
                 Position match (%)
                 <input
                   type="number"
@@ -728,10 +747,10 @@ export default function PlayerDiscoveryHomePage() {
                     }))
                   }
                   placeholder="eg 15"
-                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2 text-sm dark:border-neutral-600"
+                  className="portal-control"
                 />
               </label>
-              <label className="text-sm text-neutral-700 dark:text-neutral-300">
+              <label className="portal-field">
                 Availability (%)
                 <input
                   type="number"
@@ -745,10 +764,10 @@ export default function PlayerDiscoveryHomePage() {
                     }))
                   }
                   placeholder="eg 15"
-                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2 text-sm dark:border-neutral-600"
+                  className="portal-control"
                 />
               </label>
-              <label className="text-sm text-neutral-700 dark:text-neutral-300">
+              <label className="portal-field">
                 Recent transactions (%)
                 <input
                   type="number"
@@ -762,10 +781,10 @@ export default function PlayerDiscoveryHomePage() {
                     }))
                   }
                   placeholder="eg 20"
-                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2 text-sm dark:border-neutral-600"
+                  className="portal-control"
                 />
               </label>
-              <label className="text-sm text-neutral-700 dark:text-neutral-300">
+              <label className="portal-field">
                 Target position
                 <select
                   value={rankingDraft.targetPosition}
@@ -775,7 +794,7 @@ export default function PlayerDiscoveryHomePage() {
                       targetPosition: e.target.value,
                     }))
                   }
-                  className="mt-1.5 w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2 text-sm dark:border-neutral-600"
+                  className="portal-control"
                 >
                   <option value="">Select position</option>
                   {POSITION_FILTER_OPTIONS.map((pos) => (
@@ -785,11 +804,12 @@ export default function PlayerDiscoveryHomePage() {
                   ))}
                 </select>
               </label>
+              </div>
             </div>
             <p
               className={`mt-3 text-xs ${
                 rankingWeightsValid
-                  ? "text-neutral-500"
+                  ? "text-neutral-500 dark:text-neutral-400"
                   : "text-red-600"
               }`}
             >
@@ -800,19 +820,15 @@ export default function PlayerDiscoveryHomePage() {
             {!rankingTargetPositionValid ? (
               <p className="mt-1 text-xs text-red-600">Please select a target position.</p>
             ) : null}
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setRankingModalOpen(false)}
-                className="rounded-portal-sm border border-neutral-300 px-3 py-2 text-sm"
-              >
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button type="button" onClick={() => setRankingModalOpen(false)} className="portal-btn-ghost">
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={saveRankingPreferences}
                 disabled={!rankingWeightsValid || !rankingTargetPositionValid}
-                className="rounded-portal-sm bg-portal-accent px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="portal-btn-primary"
               >
                 Save
               </button>

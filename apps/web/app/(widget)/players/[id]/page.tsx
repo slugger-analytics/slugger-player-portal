@@ -52,12 +52,9 @@ export default async function PlayerDetailPage({ params, searchParams }: Props) 
     p.team
 
   return (
-    <main className="px-4 pb-10 sm:px-5">
-      <div className="mb-5">
-        <Link
-          href="/dashboard"
-          className="text-sm font-semibold text-portal-accent transition hover:text-portal-accent-hover hover:underline"
-        >
+    <main className="portal-page">
+      <div>
+        <Link href="/dashboard" className="portal-link-subtle text-sm">
           ← Back to Player Discovery Home
         </Link>
       </div>
@@ -65,47 +62,48 @@ export default async function PlayerDetailPage({ params, searchParams }: Props) 
       <PlayerDetailFavoriteBar playerId={p.id} playerName={p.name} />
       <PlayerHistoryTracker playerId={p.id} playerName={p.name} position={p.position} team={p.team} />
 
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-black">{p.name}</h1>
-        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-neutral-700">
+      <header>
+        <h1 className="text-3xl font-bold tracking-tight text-black dark:text-neutral-100">{p.name}</h1>
+        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-neutral-700 dark:text-neutral-300">
           <span>
-            <span className="text-neutral-500">Position:</span> {p.position}
+            <span className="text-neutral-500 dark:text-neutral-400">Position:</span> {p.position}
           </span>
           <span>
-            <span className="text-neutral-500">Current team:</span> {currentTeamFromStats || "—"}
+            <span className="text-neutral-500 dark:text-neutral-400">Current team:</span>{" "}
+            {currentTeamFromStats || "—"}
           </span>
           <span>
-            <span className="text-neutral-500">Status:</span> {p.status}
+            <span className="text-neutral-500 dark:text-neutral-400">Status:</span> {p.status}
           </span>
           {rankScoreOutOf100 != null ? (
             <span>
-              <span className="text-neutral-500">Rank score:</span> {rankScoreOutOf100}/100
+              <span className="text-neutral-500 dark:text-neutral-400">Rank score:</span> {rankScoreOutOf100}/100
             </span>
           ) : null}
           {p.age != null ? (
             <span>
-              <span className="text-neutral-500">Age:</span> {p.age}
+              <span className="text-neutral-500 dark:text-neutral-400">Age:</span> {p.age}
             </span>
           ) : null}
           <span>
-            <span className="text-neutral-500">Max experience level:</span>{" "}
+            <span className="text-neutral-500 dark:text-neutral-400">Max experience level:</span>{" "}
             {experienceLevelDisplayLabel(p.experienceLevel)}
           </span>
           <span>
-            <span className="text-neutral-500">Bats:</span>{" "}
+            <span className="text-neutral-500 dark:text-neutral-400">Bats:</span>{" "}
             {p.bats != null ? batHandDisplayLabel(p.bats) : "—"}
           </span>
           <span>
-            <span className="text-neutral-500">Throws:</span>{" "}
+            <span className="text-neutral-500 dark:text-neutral-400">Throws:</span>{" "}
             {p.throws != null ? throwHandDisplayLabel(p.throws) : "—"}
           </span>
         </div>
       </header>
 
-      <section className="mb-8">
+      <section>
         {showPitching ? (
           <div>
-            <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-portal-accent">
+            <h2 className="mb-3 text-xs font-bold uppercase tracking-wider portal-text-accent">
               Pitching
             </h2>
             <PitchingTable
@@ -115,7 +113,7 @@ export default async function PlayerDetailPage({ params, searchParams }: Props) 
           </div>
         ) : (
           <div>
-            <h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-portal-accent">
+            <h2 className="mb-3 text-xs font-bold uppercase tracking-wider portal-text-accent">
               Batting
             </h2>
             <BattingTable
@@ -127,8 +125,10 @@ export default async function PlayerDetailPage({ params, searchParams }: Props) 
       </section>
 
       <section>
-        <h2 className="mb-1 text-lg font-bold text-black">Recent transactions</h2>
-        <p className="mb-4 text-xs text-neutral-500">Retired, released, and free agent only.</p>
+        <h2 className="mb-1 text-lg font-bold text-black dark:text-neutral-100">Recent transactions</h2>
+        <p className="mb-4 text-xs text-neutral-500 dark:text-neutral-400">
+          Retired, released, and free agent only.
+        </p>
         <TransactionHistoryView playerId={p.id} />
       </section>
     </main>
@@ -145,7 +145,7 @@ function BattingTable({
   return (
     <div className="portal-surface overflow-hidden">
       <table className="w-full text-left text-sm">
-        <thead className="bg-portal-filter-bg/80 text-xs font-semibold uppercase tracking-wide text-neutral-600">
+        <thead className="bg-portal-filter-bg text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
           <tr>
             <th className="px-3 py-2" />
             <th className="px-3 py-2">Season</th>
@@ -212,7 +212,7 @@ function PitchingTable({
   return (
     <div className="portal-surface overflow-hidden">
       <table className="w-full text-left text-sm">
-        <thead className="bg-portal-filter-bg/80 text-xs font-semibold uppercase tracking-wide text-neutral-600">
+        <thead className="bg-portal-filter-bg text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
           <tr>
             <th className="px-3 py-2" />
             <th className="px-3 py-2">Season</th>

@@ -10,7 +10,13 @@
  * - Mount `POST /sync` to run the TBC ingest pipeline (optional `SYNC_INTERNAL_KEY`)
  * - Connect Prisma before listening on `PORT` (default 4000)
  *
- * **Usage:** `npm run dev` (tsx watch) or `npm run build && npm start` after `tsc`.
+ * **Usage:**
+ * - Local: leave `BASE_PATH` unset so routes are `/health`, `/players`, `/sync`.
+ * - Production (ALB): set `BASE_PATH` (e.g. `/widgets/player-portal`); routes are under `${BASE_PATH}/api/...`.
+ * - If `BASE_PATH` is set (e.g. copied from prod), routes are **also** mounted at `/` so
+ *   `NEXT_PUBLIC_API_URL=http://localhost:4000` still hits `/health`, `/players`, `/sync`.
+ *
+ * Run: `npm run dev` (tsx watch) or `npm run build && npm start` after `tsc`.
  */
 
 import cors from "cors"
@@ -27,19 +33,53 @@ const corsOrigin: string | boolean = process.env.CORS_ALLOWED_ORIGIN || true
 app.use(cors({ origin: corsOrigin }))
 app.use(express.json())
 
-// ALB forwards the full path (e.g. /widgets/player-portal/api/health).
-// In production BASE_PATH is set; locally it's empty so routes stay at /.
-const base = process.env.BASE_PATH
-  ? `${process.env.BASE_PATH}/api`
-  : ""
+/** e.g. `/widgets/player-portal/api` when `BASE_PATH=/widgets/player-portal` */
+function apiPathPrefixFromEnv(): string {
+  const raw = process.env.BASE_PATH?.trim()
+  if (!raw) return ""
+  const base = raw.replace(/\/$/, "")
+  return `${base}/api`
+}
 
-/** Liveness/readiness probe for Docker or process managers. */
-app.get(`${base}/health`, (_req, res) => {
-  res.json({ ok: true })
-})
+const productionApiPrefix = apiPathPrefixFromEnv()
+/** When BASE_PATH is set, still mount the same routes at `/` for local clients that use a bare origin. */
+const alsoMountAtRoot = Boolean(productionApiPrefix)
 
-app.use(`${base}/players`, createPlayerRouter())
-app.use(`${base}/sync`, createSyncRouter())
+function mountApiRoutes(pathPrefix: string): void {
+  const p = pathPrefix.replace(/\/$/, "")
+  app.get(`${p}/health`, (_req, res) => {
+    res.json({ ok: true })
+  })
+  app.use(`${p}/players`, createPlayerRouter())
+  app.use(`${p}/sync`, createSyncRouter())
+}
+
+if (productionApiPrefix) {
+  mountApiRoutes(productionApiPrefix)
+  if (alsoMountAtRoot) {
+    mountApiRoutes("")
+  }
+} else {
+  mountApiRoutes("")
+}
+
+if (process.env.NODE_ENV !== "production") {
+  app.get("/", (_req, res) => {
+    const hints = [
+      "Player Portal API",
+      "",
+      productionApiPrefix
+        ? `Prefixed routes (BASE_PATH): ${productionApiPrefix}/health, …/players, …/sync`
+        : "Try GET /health, GET /players",
+      alsoMountAtRoot ? "Also mounted at /health, /players, /sync (duplicate of BASE_PATH routes)." : "",
+      "",
+      "If the server exits immediately, check DATABASE_URL and run Postgres + prisma migrate.",
+    ]
+      .filter(Boolean)
+      .join("\n")
+    res.type("text/plain").send(hints)
+  })
+}
 
 /** Last-resort JSON error handler for route failures and unexpected errors. */
 app.use(
@@ -61,6 +101,14 @@ async function main() {
   app.listen(config.port, () => {
     // eslint-disable-next-line no-console
     console.log(`API listening on http://localhost:${config.port}`)
+    if (productionApiPrefix) {
+      // eslint-disable-next-line no-console
+      console.log(`  API route prefix: ${productionApiPrefix}`)
+      if (alsoMountAtRoot) {
+        // eslint-disable-next-line no-console
+        console.log(`  same routes also at http://localhost:${config.port}/health …`)
+      }
+    }
   })
 }
 
