@@ -203,125 +203,134 @@ export default function UpdatesPage() {
     })()
   }
 
+  const linkClass = "portal-link text-sm"
+
   return (
-    <main className="px-4 pb-10 sm:px-5">
-      <h1 className="text-3xl font-bold tracking-tight text-black dark:text-neutral-100">Updates</h1>
-      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-        See recent players that match your saved profiles, and players you&apos;ve marked with the bell icon for
-        follow-ups.
-      </p>
-
-      <section className="mt-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-          From your saved profiles
-        </h2>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-          Matches your criteria from{" "}
-          <Link href="/preferences" className="font-semibold text-[#4A5F78] underline dark:text-portal-accent">
-            Preferences
-          </Link>
-          . Only players with <strong>new</strong> updates (or not yet marked read) appear — up to{" "}
-          {PROFILE_UPDATE_DISPLAY_LIMIT} at a time. Use <strong>Mark as read</strong> to see the next batch. If
-          someone&apos;s transaction history changes again, they show up here again.
-        </p>
-
-        {profilesOrdered.length === 0 ? (
-          <p className="mt-4 rounded-portal-sm border border-dashed border-portal-filter-border bg-portal-surface px-4 py-6 text-sm text-neutral-600 dark:border-neutral-600 dark:text-neutral-400">
-            No saved profiles yet.{" "}
-            <Link href="/preferences" className="font-semibold text-[#4A5F78] underline dark:text-portal-accent">
-              Create a profile
-            </Link>{" "}
-            to see matching players here.
+    <main className="portal-page">
+      <header className="portal-page-header">
+        <div className="portal-title-stack max-w-2xl">
+          <h1 className="text-3xl font-bold tracking-tight text-black dark:text-neutral-100">Updates</h1>
+          <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+            See recent players that match your saved profiles, and players you&apos;ve marked with the bell icon for
+            follow-ups.
           </p>
-        ) : (
-          <div className="mt-6 flex flex-col gap-8">
-            {profilesOrdered.map((p) => {
-              const state = byProfile[p.id]
-              const players = state?.players ?? []
-              const matchTotal = state?.matchTotal
-              const caughtUp =
-                !state?.loading &&
-                !state?.error &&
-                players.length === 0 &&
-                matchTotal != null &&
-                matchTotal > 0
-              return (
-                <div
-                  key={p.id}
-                  className="rounded-portal-lg border border-portal-filter-border bg-portal-filter-bg/20 p-4 dark:border-neutral-600/50"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <h3 className="font-semibold text-neutral-900 dark:text-neutral-100">{p.name}</h3>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-500">
-                        Updates (up to {PROFILE_UPDATE_DISPLAY_LIMIT} at a time)
-                      </p>
-                    </div>
-                    {players.length > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => handleMarkProfileRead(p.id, players)}
-                        className="shrink-0 rounded-portal-sm border border-portal-filter-border bg-portal-surface px-3 py-1.5 text-xs font-semibold text-[#4A5F78] shadow-portal-card transition hover:border-portal-accent dark:text-portal-accent"
-                      >
-                        Mark as read
-                      </button>
-                    ) : null}
-                  </div>
-                  {state?.loading ? (
-                    <p className="mt-4 text-sm text-neutral-500">Loading…</p>
-                  ) : state?.error ? (
-                    <p className="mt-4 text-sm text-red-700 dark:text-red-400">{state.error}</p>
-                  ) : players.length === 0 && matchTotal === 0 ? (
-                    <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">
-                      No players match this profile right now.
-                    </p>
-                  ) : caughtUp ? (
-                    <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">
-                      You&apos;re caught up — no new updates for this profile. Check back after more transaction
-                      activity, or review matches in{" "}
-                      <Link href="/dashboard" className="font-semibold text-[#4A5F78] underline dark:text-portal-accent">
-                        Discovery
-                      </Link>
-                      .
-                    </p>
-                  ) : players.length === 0 ? (
-                    <p className="mt-4 text-sm text-neutral-600 dark:text-neutral-400">No new updates right now.</p>
-                  ) : (
-                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      {players.map((pl) => (
-                        <PlayerCard key={pl.id} player={pl} className="!max-w-none" />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+        </div>
+      </header>
+
+      <section>
+        <div className="portal-filter-shell flex flex-col gap-4 sm:p-5">
+          <div className="portal-title-stack">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              From your saved profiles
+            </h2>
+            <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+              Matches your criteria from <Link href="/preferences" className={linkClass}>Preferences</Link>. Only
+              players with <strong>new</strong> updates (or not yet marked read) appear — up to{" "}
+              {PROFILE_UPDATE_DISPLAY_LIMIT} at a time. Use <strong>Mark as read</strong> to see the next batch. If
+              someone&apos;s transaction history changes again, they show up here again.
+            </p>
           </div>
-        )}
+
+          <div className="portal-panel-well sm:p-5">
+            {profilesOrdered.length === 0 ? (
+              <div className="portal-empty-well text-sm text-neutral-600 dark:text-neutral-400">
+                No saved profiles yet.{" "}
+                <Link href="/preferences" className={linkClass}>
+                  Create a profile
+                </Link>{" "}
+                to see matching players here.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-5">
+                {profilesOrdered.map((p) => {
+                  const state = byProfile[p.id]
+                  const players = state?.players ?? []
+                  const matchTotal = state?.matchTotal
+                  const caughtUp =
+                    !state?.loading &&
+                    !state?.error &&
+                    players.length === 0 &&
+                    matchTotal != null &&
+                    matchTotal > 0
+                  return (
+                    <div key={p.id} className="portal-surface flex flex-col gap-4 p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <h3 className="font-semibold text-neutral-900 dark:text-neutral-100">{p.name}</h3>
+                          <p className="text-xs text-neutral-500 dark:text-neutral-500">
+                            Updates (up to {PROFILE_UPDATE_DISPLAY_LIMIT} at a time)
+                          </p>
+                        </div>
+                        {players.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => handleMarkProfileRead(p.id, players)}
+                            className="portal-btn-secondary-xs shrink-0"
+                          >
+                            Mark as read
+                          </button>
+                        ) : null}
+                      </div>
+                      {state?.loading ? (
+                        <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading…</p>
+                      ) : state?.error ? (
+                        <p className="text-sm text-red-700 dark:text-red-400">{state.error}</p>
+                      ) : players.length === 0 && matchTotal === 0 ? (
+                        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                          No players match this profile right now.
+                        </p>
+                      ) : caughtUp ? (
+                        <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                          You&apos;re caught up — no new updates for this profile. Check back after more transaction
+                          activity, or review matches in <Link href="/dashboard" className={linkClass}>Discovery</Link>.
+                        </p>
+                      ) : players.length === 0 ? (
+                        <p className="text-sm text-neutral-600 dark:text-neutral-400">No new updates right now.</p>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          {players.map((pl) => (
+                            <PlayerCard key={pl.id} player={pl} className="!max-w-none" />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </section>
 
-      <section className="mt-12 border-t border-neutral-200/80 pt-10 dark:border-neutral-700/80">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-          Players you follow
-        </h2>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-          Use the bell on any player card (next to the heart) to add or remove them here.
-        </p>
-        {watchedLoading ? (
-          <p className="mt-4 text-sm text-neutral-500">Loading…</p>
-        ) : watchedError ? (
-          <p className="mt-4 text-sm text-red-700 dark:text-red-400">{watchedError}</p>
-        ) : watchIds.length === 0 ? (
-          <p className="mt-4 rounded-portal-sm border border-dashed border-portal-filter-border bg-portal-surface px-4 py-6 text-sm text-neutral-600 dark:border-neutral-600 dark:text-neutral-400">
-            No players yet. Open a player from discovery or favorites and tap the bell to track them for updates.
-          </p>
-        ) : (
-          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {watchedSummaries.map((pl) => (
-              <PlayerCard key={pl.id} player={pl} className="!max-w-none" />
-            ))}
+      <section>
+        <div className="portal-filter-shell flex flex-col gap-4 sm:p-5">
+          <div className="portal-title-stack">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              Players you follow
+            </h2>
+            <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+              Use the bell on any player card (next to the heart) to add or remove them here.
+            </p>
           </div>
-        )}
+
+          <div className="portal-panel-well sm:p-5">
+            {watchedLoading ? (
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading…</p>
+            ) : watchedError ? (
+              <p className="text-sm text-red-700 dark:text-red-400">{watchedError}</p>
+            ) : watchIds.length === 0 ? (
+              <div className="portal-empty-well text-sm text-neutral-600 dark:text-neutral-400">
+                No players yet. Open a player from discovery or favorites and tap the bell to track them for updates.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {watchedSummaries.map((pl) => (
+                  <PlayerCard key={pl.id} player={pl} className="!max-w-none" />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </section>
     </main>
   )

@@ -35,7 +35,7 @@ export function TransactionHistoryView({ playerId }: Props) {
 
   if (error) {
     return (
-      <p className="rounded-portal-sm border border-red-100 bg-red-50/80 px-3 py-2 text-sm text-red-800">
+      <p className="rounded-portal-sm border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
         {error}
       </p>
     )
@@ -56,10 +56,10 @@ export function TransactionHistoryView({ playerId }: Props) {
       {items.map((t, idx) => (
         <li
           key={`${t.date}-${t.type}-${idx}`}
-          className="flex flex-wrap items-start gap-3 px-4 py-3 text-sm transition hover:bg-portal-filter-bg/50"
+          className="flex flex-wrap items-start gap-3 px-4 py-3 text-sm transition hover:bg-portal-filter-bg dark:hover:bg-neutral-800/80"
         >
           <span className="w-[92px] shrink-0 font-medium text-neutral-600">{t.date}</span>
-          <span className="inline-flex shrink-0 rounded-full bg-portal-filter-bg px-2.5 py-0.5 text-xs font-semibold text-[#4A5F78] ring-1 ring-portal-filter-border/60">
+          <span className="portal-badge">
             {t.type}
           </span>
           <span className="min-w-0 flex-1 leading-snug text-neutral-800">{t.description}</span>

@@ -25,7 +25,7 @@ function NavLink({
       {icon}
     </div>
   ) : (
-    <span className={active ? "text-[#4A5F78] dark:text-portal-accent" : "text-neutral-500 dark:text-neutral-400"}>
+    <span className={active ? "portal-text-accent" : "text-neutral-500 dark:text-neutral-400"}>
       {icon}
     </span>
   )
@@ -34,7 +34,7 @@ function NavLink({
       href={href}
       className={`flex flex-col items-center gap-1.5 rounded-lg p-1 transition hover:bg-portal-chrome/80 dark:hover:bg-neutral-800/60 ${
         active && !homeStyle
-          ? "text-[#4A5F78] dark:text-portal-accent"
+          ? "portal-text-accent"
           : "text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
       }`}
     >
@@ -55,7 +55,7 @@ export function WidgetSidebar() {
         href="/dashboard"
         label="Home"
         homeStyle
-        icon={<Home className="h-6 w-6 text-[#4A5F78] dark:text-portal-accent" strokeWidth={2} aria-hidden />}
+        icon={<Home className="h-6 w-6 portal-text-accent" strokeWidth={2} aria-hidden />}
         activeMatch={(p) => p === "/dashboard"}
       />
       <NavLink
@@ -79,9 +79,7 @@ export function WidgetSidebar() {
       <Link
         href="/preferences"
         className={`flex flex-col items-center gap-1.5 rounded-lg p-1 transition hover:bg-portal-chrome/80 hover:text-neutral-700 dark:hover:bg-neutral-800/60 dark:hover:text-neutral-200 ${
-          pathname === "/preferences"
-            ? "text-[#4A5F78] dark:text-portal-accent"
-            : "text-neutral-500 dark:text-neutral-400"
+          pathname === "/preferences" ? "portal-text-accent" : "text-neutral-500 dark:text-neutral-400"
         }`}
       >
         <span aria-hidden>

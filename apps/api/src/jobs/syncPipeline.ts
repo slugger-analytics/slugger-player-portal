@@ -101,9 +101,9 @@ export async function runSyncPipeline(): Promise<SyncPipelineResult> {
   const filteredPit = parsedPit.filter((p) => eligibleIds.has(p.playerId))
 
   await players.upsertPlayers(playerList)
-  await txs.upsertTransactions(parsedTx)
-  await batting.upsertStats(parsedBat)
-  await pitching.upsertStats(parsedPit)
+  await txs.upsertTransactions(filteredTx)
+  await batting.upsertStats(filteredBat)
+  await pitching.upsertStats(filteredPit)
   await txs.enforcePortalTransactionRetentionPolicy()
 
   const result: SyncPipelineResult = {

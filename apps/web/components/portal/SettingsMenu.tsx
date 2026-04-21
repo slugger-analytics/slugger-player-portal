@@ -44,18 +44,12 @@ export function SettingsMenu() {
           <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             Appearance
           </p>
-          <div
-            className="flex rounded-portal-sm border border-portal-filter-border bg-portal-filter-bg p-0.5 dark:border-neutral-600/60"
-            role="group"
-            aria-label="Color theme"
-          >
+          <div className="portal-tablist p-0.5" role="group" aria-label="Color theme">
             <button
               type="button"
               onClick={() => setTheme("light")}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-[10px] px-3 py-2 text-sm font-semibold transition ${
-                theme === "light"
-                  ? "bg-portal-surface text-[#4A5F78] shadow-sm dark:bg-neutral-800 dark:text-portal-accent"
-                  : "text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-200"
+              className={`portal-tab flex items-center justify-center gap-2 ${
+                theme === "light" ? "portal-tab-active" : "portal-tab-inactive"
               }`}
             >
               <Sun className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
@@ -64,10 +58,8 @@ export function SettingsMenu() {
             <button
               type="button"
               onClick={() => setTheme("dark")}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-[10px] px-3 py-2 text-sm font-semibold transition ${
-                theme === "dark"
-                  ? "bg-portal-surface text-[#4A5F78] shadow-sm dark:bg-neutral-800 dark:text-portal-accent"
-                  : "text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-200"
+              className={`portal-tab flex items-center justify-center gap-2 ${
+                theme === "dark" ? "portal-tab-active" : "portal-tab-inactive"
               }`}
             >
               <Moon className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />

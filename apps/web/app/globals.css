@@ -52,11 +52,83 @@ body {
 @layer components {
   /** Primary actions — Save, confirm — matches steel blue accent bar */
   .portal-btn-primary {
-    @apply rounded-portal-sm bg-portal-accent px-4 py-2 text-sm font-medium text-white shadow-portal-card transition hover:bg-portal-accent-hover;
+    @apply rounded-portal-sm bg-portal-accent px-4 py-2 text-sm font-medium text-white shadow-portal-card transition hover:bg-portal-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-portal-main disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-neutral-900;
   }
   /** Secondary / ghost */
   .portal-btn-ghost {
-    @apply rounded-portal-sm px-4 py-2 text-sm text-neutral-700 transition hover:bg-neutral-100;
+    @apply rounded-portal-sm px-4 py-2 text-sm text-neutral-700 transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-portal-main dark:text-neutral-200 dark:hover:bg-neutral-800/60 dark:focus-visible:ring-offset-neutral-900;
+  }
+  /** Bordered neutral action — toolbar, refresh, modal secondary */
+  .portal-btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-portal-sm border border-portal-filter-border bg-portal-surface px-4 py-2.5 text-sm font-semibold text-[#4A5F78] shadow-portal-card transition hover:border-portal-accent hover:bg-neutral-100 dark:hover:bg-neutral-800/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-portal-main disabled:cursor-not-allowed disabled:opacity-60 dark:text-portal-accent dark:focus-visible:ring-offset-neutral-900;
+  }
+  .portal-btn-secondary-sm {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-portal-sm border border-portal-filter-border bg-portal-surface px-3 py-2 text-sm font-semibold text-[#4A5F78] shadow-portal-card transition hover:border-portal-accent hover:bg-neutral-100 dark:hover:bg-neutral-800/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-portal-main disabled:cursor-not-allowed disabled:opacity-60 dark:text-portal-accent dark:focus-visible:ring-offset-neutral-900;
+  }
+  .portal-btn-secondary-xs {
+    @apply inline-flex shrink-0 items-center justify-center gap-1.5 rounded-portal-sm border border-portal-filter-border bg-portal-surface px-3 py-2 text-xs font-semibold text-[#4A5F78] shadow-portal-card transition hover:border-portal-accent hover:bg-neutral-100 dark:hover:bg-neutral-800/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-portal-main disabled:cursor-not-allowed disabled:opacity-60 dark:text-portal-accent dark:focus-visible:ring-offset-neutral-900;
+  }
+  /** Destructive outline (delete, remove from list) */
+  .portal-btn-danger-outline {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-portal-sm border border-red-200/90 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-portal-main dark:border-red-900/50 dark:text-red-400 dark:hover:bg-red-950/40 dark:focus-visible:ring-offset-neutral-900;
+  }
+  /** Accent text tone (sidebar, tab selected, badges) */
+  .portal-text-accent {
+    @apply text-[#4A5F78] dark:text-portal-accent;
+  }
+  /** Text link with underline */
+  .portal-link {
+    @apply font-semibold text-portal-accent underline transition hover:text-portal-accent-hover;
+  }
+  /** Text link underline on hover only */
+  .portal-link-subtle {
+    @apply font-semibold text-portal-accent transition hover:text-portal-accent-hover hover:underline;
+  }
+  /** Native text fields and selects */
+  .portal-control {
+    @apply w-full rounded-portal-sm border border-neutral-300 bg-portal-surface px-3 py-2.5 text-sm text-neutral-900 shadow-sm transition focus:border-portal-accent focus:outline-none focus:ring-2 focus:ring-neutral-400/35 dark:border-neutral-600 dark:text-neutral-100;
+  }
+  /** Label wrapping a control (vertical stack) */
+  .portal-field {
+    @apply flex flex-col gap-1.5 text-sm font-medium text-neutral-700 dark:text-neutral-300;
+  }
+  /** Checkboxes in forms */
+  .portal-checkbox {
+    @apply h-4 w-4 shrink-0 rounded border border-portal-filter-border text-portal-accent focus:ring-2 focus:ring-neutral-400/45 dark:border-neutral-600;
+  }
+  /** Dropdown / context menu panel */
+  .portal-menu {
+    @apply overflow-hidden rounded-portal-sm border border-neutral-200/90 bg-portal-surface py-1 shadow-portal dark:border-neutral-600/80;
+  }
+  .portal-menu-item {
+    @apply block w-full px-3 py-2.5 text-left text-sm text-neutral-800 transition hover:bg-portal-filter-bg dark:text-neutral-100 dark:hover:bg-neutral-800/60;
+  }
+  .portal-menu-item-danger {
+    @apply block w-full px-3 py-2.5 text-left text-sm text-red-700 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40;
+  }
+  /** Segmented control (search mode, theme) */
+  .portal-tablist {
+    @apply flex gap-1 rounded-portal-sm border border-portal-filter-border bg-portal-filter-bg p-1 dark:border-neutral-600/60;
+  }
+  .portal-tab {
+    @apply relative flex-1 rounded-portal-sm px-3 py-2.5 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-portal-accent focus-visible:ring-offset-2 focus-visible:ring-offset-portal-filter-bg dark:focus-visible:ring-offset-neutral-900;
+  }
+  .portal-tab-active {
+    @apply bg-portal-surface font-bold text-[#4A5F78] shadow-portal-card ring-2 ring-portal-accent dark:bg-neutral-800 dark:text-portal-accent dark:ring-portal-accent;
+  }
+  .portal-tab-inactive {
+    @apply font-medium text-neutral-500 hover:bg-white/70 hover:text-neutral-800 dark:text-neutral-500 dark:hover:bg-neutral-800/60 dark:hover:text-neutral-200;
+  }
+  /** Pill label (transaction type, tags) */
+  .portal-badge {
+    @apply inline-flex shrink-0 rounded-full bg-portal-filter-bg px-2.5 py-0.5 text-xs font-semibold text-[#4A5F78] ring-1 ring-neutral-300 dark:text-portal-accent dark:ring-neutral-600;
+  }
+  /** Compact icon-only control (list reorder, overflow menu trigger) */
+  .portal-icon-btn {
+    @apply rounded p-1 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 disabled:opacity-30 dark:text-neutral-400 dark:hover:bg-neutral-800/60 dark:hover:text-neutral-200;
+  }
+  .portal-icon-btn-danger {
+    @apply rounded p-2 text-neutral-500 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40 dark:hover:text-rose-400;
   }
   /** White surface card inside gray panels */
   .portal-surface {
@@ -69,5 +141,37 @@ body {
   /** Gray results / content well */
   .portal-panel-well {
     @apply rounded-portal-lg bg-portal-panel p-3 shadow-inner sm:p-4;
+  }
+  /** Widget page: equal vertical spacing between header, banners, and main panels */
+  .portal-page {
+    @apply flex flex-col gap-6 px-4 pb-10 sm:px-5;
+  }
+  /** Title row + optional actions (matches across Favorites, History, Updates, Preferences, Home) */
+  .portal-page-header {
+    @apply flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between;
+  }
+  /** H1 + subtitle (or back link + title + subtitle) */
+  .portal-title-stack {
+    @apply space-y-2;
+  }
+  /** Modal backdrop — blur + dim; panel below stays opaque */
+  .portal-modal-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-neutral-950/45 p-4 backdrop-blur-sm dark:bg-black/55;
+  }
+  /** Opaque dialog shell (ranking, transaction types, etc.) */
+  .portal-modal-card {
+    @apply w-full rounded-portal border-2 border-portal-filter-border bg-portal-surface p-5 shadow-portal dark:border-neutral-600 dark:bg-neutral-900;
+  }
+  /** Nested form / options block inside a modal */
+  .portal-modal-inset {
+    @apply rounded-portal-sm border border-neutral-200 bg-portal-filter-bg p-3 shadow-inner dark:border-neutral-600 dark:bg-neutral-800;
+  }
+  /** Empty-state / placeholder panel (solid, not washed out) */
+  .portal-empty-well {
+    @apply rounded-portal border border-portal-filter-border bg-portal-filter-bg px-5 py-10 text-center dark:border-neutral-600;
+  }
+  /** Soft banner below header (player profile actions) */
+  .portal-callout {
+    @apply flex flex-col gap-3 rounded-portal-sm border border-portal-filter-border bg-portal-filter-bg px-4 py-3 dark:border-neutral-600 sm:flex-row sm:flex-wrap sm:items-center;
   }
 }

@@ -4,10 +4,10 @@
  */
 export function PortalPlaceholder({ title }: { title: string }) {
   return (
-    <main className="px-4 pb-10 pt-1">
-      <h1 className="mb-6 text-3xl font-bold tracking-tight text-black">{title}</h1>
+    <main className="px-4 pb-10 pt-1 sm:px-5">
+      <h1 className="mb-6 text-3xl font-bold tracking-tight text-black dark:text-neutral-100">{title}</h1>
       <div className="portal-panel-well max-w-lg">
-        <p className="text-sm leading-relaxed text-neutral-600">
+        <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
           This section is not built yet. Navigation and layout use the Player Discovery style
           so new features can match the home experience.
         </p>
