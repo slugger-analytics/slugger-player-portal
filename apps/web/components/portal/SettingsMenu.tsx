@@ -28,12 +28,12 @@ export function SettingsMenu() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="rounded-lg p-2 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+        className="rounded-full p-2.5 text-neutral-500 transition hover:bg-white/85 hover:text-neutral-800 active:scale-[0.98] sm:p-3 dark:text-neutral-400 dark:hover:bg-neutral-800/65 dark:hover:text-neutral-100"
         aria-label="Settings"
         aria-expanded={open}
         aria-haspopup="dialog"
       >
-        <Settings className="h-6 w-6" strokeWidth={1.5} />
+        <Settings className="h-5 w-5" strokeWidth={1.75} />
       </button>
       {open ? (
         <div

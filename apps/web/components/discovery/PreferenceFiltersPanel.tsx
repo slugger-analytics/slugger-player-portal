@@ -129,7 +129,7 @@ export function PreferenceFiltersPanel({ filters, onFiltersChange, onlyWithStats
           aria-controls="add-preferences-menu"
           id="add-preferences-button"
           onClick={() => setAddPrefsOpen((o) => !o)}
-          className="portal-btn-secondary h-11 w-full"
+          className="portal-btn-primary inline-flex h-11 w-full items-center justify-center gap-2"
         >
           <Plus className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
           Add preferences
@@ -143,7 +143,7 @@ export function PreferenceFiltersPanel({ filters, onFiltersChange, onlyWithStats
             id="add-preferences-menu"
             role="listbox"
             aria-labelledby="add-preferences-button"
-            className="portal-menu absolute left-0 right-0 top-[calc(100%+6px)] z-30"
+            className="portal-menu absolute left-0 right-0 top-[calc(100%+6px)] z-[70]"
           >
             {ADD_PREFERENCE_OPTIONS.map(({ kind, label }) => (
               <li key={kind} role="none">

@@ -160,8 +160,16 @@ export function FilterModal({
   const canSave = isPreferenceComplete()
 
   return (
-    <div className="portal-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="filter-modal-title">
-      <div className="portal-modal-card max-w-md">
+    <div
+      className="portal-modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="filter-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div className="portal-modal-card max-w-md" onClick={(e) => e.stopPropagation()}>
         <h2 id="filter-modal-title" className="text-lg font-bold text-black dark:text-neutral-100">
           {state.mode === "edit" ? "Edit preference" : "Add preference"}
         </h2>
@@ -350,13 +358,13 @@ export function FilterModal({
           ) : null}
         </div>
 
-        <div className="mt-8 flex justify-end gap-2 border-t border-neutral-100 pt-4 dark:border-neutral-700">
-          <button type="button" className="portal-btn-ghost" onClick={onClose}>
+        <div className="portal-modal-footer mt-8">
+          <button type="button" className="portal-btn-ghost w-full sm:min-w-[5.5rem] sm:w-auto" onClick={onClose}>
             Cancel
           </button>
           <button
             type="button"
-            className="portal-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+            className="portal-btn-primary w-full min-h-[2.5rem] sm:min-w-[5.5rem] sm:w-auto disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!canSave}
             title={
               canSave

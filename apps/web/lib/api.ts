@@ -17,12 +17,22 @@ import type {
   Transaction,
 } from "@available-player-portal/shared"
 
-/** Base URL for the Express API (set in `.env` for production deployments). */
+function normalizeApiBaseUrl(v: string | undefined): string {
+  const raw = (v ?? "").trim()
+  if (!raw) return "http://localhost:4000"
+  return raw.replace(/\/$/, "")
+}
+
+/**
+ * Base URL for the Express API (set in `.env` for production deployments).
+ * Treats empty/whitespace the same as unset so we never do `fetch("/players")` against the
+ * Next.js origin (404 / HTML) when `NEXT_PUBLIC_API_URL` is blank.
+ */
 export function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
-    return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
+    return normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL)
   }
-  return process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"
+  return normalizeApiBaseUrl(process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL)
 }
 
 /** Builds `?a=1&b=2` from a params object; omits undefined, empty strings, and `false`. */
@@ -46,6 +56,20 @@ function rethrowNetworkError(e: unknown, context: string): never {
   throw e
 }
 
+async function errorDetailFromResponse(res: Response): Promise<string> {
+  const text = await res.text()
+  if (!text) return res.statusText || String(res.status)
+  try {
+    const j = JSON.parse(text) as { error?: string; message?: string }
+    if (typeof j.error === "string" && j.error.trim()) return j.error.trim()
+    if (typeof j.message === "string" && j.message.trim()) return j.message.trim()
+  } catch {
+    /* not JSON */
+  }
+  const t = text.trim()
+  return t.length > 200 ? `${t.slice(0, 200)}…` : t
+}
+
 /** `GET /players` — filters + optional `limit` / `offset`; returns `{ players, total }`. */
 export async function fetchPlayerSummaries(
   params: Record<string, string | number | boolean | undefined>,
@@ -53,7 +77,10 @@ export async function fetchPlayerSummaries(
   const base = getApiBaseUrl()
   try {
     const res = await fetch(`${base}/players${qs(params)}`, { cache: "no-store" })
-    if (!res.ok) throw new Error(`Failed to load players: ${res.status}`)
+    if (!res.ok) {
+      const detail = await errorDetailFromResponse(res)
+      throw new Error(`Failed to load players (${res.status}): ${detail}`)
+    }
     const data = (await res.json()) as unknown
     if (data && typeof data === "object" && "players" in data && "total" in data) {
       return data as PlayerSummariesResponse
