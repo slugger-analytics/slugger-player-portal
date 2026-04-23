@@ -48,14 +48,7 @@ export default function FavoritesPage() {
 
   return (
     <main className="portal-page">
-      <header className="portal-page-header">
-        <div className="portal-title-stack">
-          <h1 className="text-3xl font-bold tracking-tight text-black dark:text-neutral-100">Favorites</h1>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            Use the arrows to set your ranking (#1 is top).
-          </p>
-        </div>
-      </header>
+      <h1 className="sr-only">Favorites</h1>
 
       <div className="portal-panel-well max-w-xl sm:p-5">
         {favoriteIds.length === 0 ? (

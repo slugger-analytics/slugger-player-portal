@@ -16,7 +16,7 @@ export default function WidgetShellLayout({ children }: { children: ReactNode })
         <UpdatesWatchProvider>
           <div className="flex min-h-screen flex-col">
             <WidgetTopBar />
-            <div className="min-h-0 min-w-0 flex-1 bg-portal-main">{children}</div>
+            <div className="min-w-0 flex-1 bg-portal-main">{children}</div>
           </div>
         </UpdatesWatchProvider>
       </FavoritesProvider>

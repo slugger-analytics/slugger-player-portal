@@ -96,9 +96,9 @@ body {
   .portal-checkbox {
     @apply h-4 w-4 shrink-0 rounded border border-portal-filter-border text-portal-accent focus:ring-2 focus:ring-neutral-400/45 dark:border-neutral-600;
   }
-  /** Dropdown / context menu panel */
+  /** Dropdown / context menu panel (scroll when content exceeds max height) */
   .portal-menu {
-    @apply overflow-hidden rounded-portal-sm border border-neutral-200/90 bg-portal-surface py-1 shadow-portal dark:border-neutral-600/80;
+    @apply max-h-[min(20rem,55dvh)] overflow-y-auto overflow-x-hidden overscroll-y-contain rounded-portal-sm border border-neutral-200/90 bg-portal-surface py-1 shadow-portal [scrollbar-gutter:stable] dark:border-neutral-600/80;
   }
   .portal-menu-item {
     @apply block w-full px-3 py-2.5 text-left text-sm text-neutral-800 transition hover:bg-portal-filter-bg dark:text-neutral-100 dark:hover:bg-neutral-800/60;
@@ -142,7 +142,7 @@ body {
   .portal-panel-well {
     @apply rounded-portal-lg bg-portal-panel p-3 shadow-inner sm:p-4;
   }
-  /** Widget page: equal vertical spacing between header, banners, and main panels */
+  /** Widget page: vertical spacing between header, banners, and main panels (document scrolls normally). */
   .portal-page {
     @apply flex flex-col gap-6 px-4 pb-10 pt-6 sm:px-5 sm:pt-8;
   }

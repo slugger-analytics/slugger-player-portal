@@ -18,6 +18,8 @@ export type DiscoverySnapshot = {
   sort: DiscoverySortOption
   transactionTypes: DiscoveryTransactionType[]
   customRankingPreferences?: RankingPreferences
+  /** Trimmed name substring used for `GET /players?nameSearch=…` (restored in the search field). */
+  nameSearch: string
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -83,6 +85,7 @@ function parseSnapshot(raw: string): DiscoverySnapshot | null {
       if (!isRankingPreferences(rp)) throw new Error("Invalid customRankingPreferences")
       return rp
     })()
+    const nameSearch = typeof parsed.nameSearch === "string" ? parsed.nameSearch : ""
     return {
       searchMode: sm,
       customFilters: cf,
@@ -91,6 +94,7 @@ function parseSnapshot(raw: string): DiscoverySnapshot | null {
       sort,
       transactionTypes,
       customRankingPreferences,
+      nameSearch,
     }
   } catch {
     return null

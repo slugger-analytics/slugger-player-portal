@@ -6,7 +6,7 @@
  */
 
 import Link from "next/link"
-import { ListFilter, SlidersHorizontal } from "lucide-react"
+import { ListFilter, Search, SlidersHorizontal } from "lucide-react"
 import { useEffect, useLayoutEffect, useMemo, useState } from "react"
 import { PlayerCard } from "@/components/discovery/PlayerCard"
 import { PreferenceFiltersPanel } from "@/components/discovery/PreferenceFiltersPanel"
@@ -118,6 +118,8 @@ export default function PlayerDiscoveryHomePage() {
   const [error, setError] = useState<string | null>(null)
   /** False until client applies optional return-from-profile snapshot (avoids fetch with default then snapshot). */
   const [discoveryReady, setDiscoveryReady] = useState(false)
+  const [nameSearchInput, setNameSearchInput] = useState("")
+  const [nameSearch, setNameSearch] = useState("")
 
   useLayoutEffect(() => {
     const snap = takeDiscoverySnapshot()
@@ -129,9 +131,18 @@ export default function PlayerDiscoveryHomePage() {
       setSort(snap.sort)
       setTransactionTypes(snap.transactionTypes)
       setCustomRankingPreferences(snap.customRankingPreferences)
+      setNameSearchInput(snap.nameSearch)
+      setNameSearch(snap.nameSearch)
     }
     setDiscoveryReady(true)
   }, [])
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setNameSearch(nameSearchInput.trim().slice(0, 200))
+    }, 250)
+    return () => clearTimeout(t)
+  }, [nameSearchInput])
 
   function refreshProfilesList() {
     setProfiles(loadProfiles())
@@ -168,6 +179,7 @@ export default function PlayerDiscoveryHomePage() {
         sort,
         transactionTypes,
         customRankingPreferences,
+        nameSearch,
       ),
     [
       searchMode,
@@ -178,6 +190,7 @@ export default function PlayerDiscoveryHomePage() {
       sort,
       transactionTypes,
       customRankingPreferences,
+      nameSearch,
     ],
   )
 
@@ -197,6 +210,7 @@ export default function PlayerDiscoveryHomePage() {
       sort,
       transactionTypes,
       customRankingPreferences,
+      nameSearch,
     )
     fetchPlayerSummaries({
       ...params,
@@ -228,6 +242,7 @@ export default function PlayerDiscoveryHomePage() {
     sort,
     transactionTypes,
     customRankingPreferences,
+    nameSearch,
   ])
 
   async function handleLoadMore() {
@@ -271,6 +286,7 @@ export default function PlayerDiscoveryHomePage() {
       sort,
       transactionTypes,
       customRankingPreferences,
+      nameSearch: nameSearchInput.trim().slice(0, 200),
     })
   }
 
@@ -317,19 +333,27 @@ export default function PlayerDiscoveryHomePage() {
 
   return (
     <main className="portal-page mx-auto max-w-[1600px]">
-      <header className="portal-page-header border-b border-neutral-200/70 pb-8 dark:border-neutral-700/55">
-        <div className="portal-title-stack max-w-2xl">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#4A5F78] dark:text-portal-accent">
-            Discovery
-          </p>
-          <h1 className="bg-gradient-to-br from-neutral-900 via-neutral-800 to-[#4A5F78] bg-clip-text text-3xl font-bold tracking-tight text-transparent sm:text-4xl dark:from-white dark:via-neutral-100 dark:to-portal-accent">
-            Player Discovery Home
-          </h1>
-          <p className="text-[15px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-            Run a custom search or load a saved profile from Preferences—results update as you change sort and filters.
-          </p>
-        </div>
-      </header>
+      <h1 className="sr-only">Player Discovery Home</h1>
+
+      <div className="w-full max-w-md">
+        <label className="portal-field mb-0">
+          <span className="sr-only">Search by player name</span>
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+              aria-hidden
+            />
+            <input
+              type="search"
+              value={nameSearchInput}
+              onChange={(e) => setNameSearchInput(e.target.value)}
+              placeholder="Search by name"
+              className="portal-control w-full pl-9"
+              autoComplete="off"
+            />
+          </div>
+        </label>
+      </div>
 
       <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-8">
         <section className="flex w-full shrink-0 flex-col gap-5 lg:sticky lg:top-[4.75rem] lg:w-[420px] lg:flex-shrink-0 lg:pr-1">

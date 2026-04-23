@@ -50,11 +50,14 @@ export function buildPlayerListParams(
   sort: DiscoverySortOption = "newestTransaction",
   transactionTypes: DiscoveryTransactionType[] = [],
   ranking?: RankingPreferences,
+  nameSearch = "",
 ): Record<string, string | number | boolean | undefined> {
   const q: Record<string, string | number | boolean | undefined> = {
     ...filtersToQuery(filters),
   }
   if (onlyWithStats) q.hasStats = true
+  const nameTrim = nameSearch.trim()
+  if (nameTrim) q.nameSearch = nameTrim.slice(0, 200)
   return applyDiscoverySort(q, sort, transactionTypes, ranking)
 }
 
@@ -72,11 +75,12 @@ export function buildDiscoveryListParams(
   sort: DiscoverySortOption = "newestTransaction",
   transactionTypes: DiscoveryTransactionType[] = [],
   customRankingPreferences?: RankingPreferences,
+  nameSearch = "",
 ): Record<string, string | number | boolean | undefined> {
   if (searchMode === "profile") {
     const p = profiles.find((x) => x.id === selectedProfileId)
-    if (!p) return buildPlayerListParams([], false, sort, transactionTypes)
-    return buildPlayerListParams(p.filters, p.onlyWithStats, sort, transactionTypes, p.rankingPreferences)
+    if (!p) return buildPlayerListParams([], false, sort, transactionTypes, undefined, nameSearch)
+    return buildPlayerListParams(p.filters, p.onlyWithStats, sort, transactionTypes, p.rankingPreferences, nameSearch)
   }
   return buildPlayerListParams(
     customFilters,
@@ -84,6 +88,7 @@ export function buildDiscoveryListParams(
     sort,
     transactionTypes,
     customRankingPreferences,
+    nameSearch,
   )
 }
 
