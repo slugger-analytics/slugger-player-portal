@@ -207,38 +207,48 @@ export default function UpdatesPage() {
 
   return (
     <main className="portal-page">
-      <header className="portal-page-header">
-        <div className="portal-title-stack max-w-2xl">
-          <h1 className="text-3xl font-bold tracking-tight text-black dark:text-neutral-100">Updates</h1>
-          <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-            See recent players that match your saved profiles, and players you&apos;ve marked with the bell icon for
-            follow-ups.
-          </p>
-        </div>
-      </header>
+      <h1 className="sr-only">Updates</h1>
 
       <section>
         <div className="portal-filter-shell flex flex-col gap-4 sm:p-5">
-          <div className="portal-title-stack">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+          <div className="space-y-3">
+            <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
               From your saved profiles
             </h2>
             <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-              Matches your criteria from <Link href="/preferences" className={linkClass}>Preferences</Link>. Only
-              players with <strong>new</strong> updates (or not yet marked read) appear — up to{" "}
-              {PROFILE_UPDATE_DISPLAY_LIMIT} at a time. Use <strong>Mark as read</strong> to see the next batch. If
-              someone&apos;s transaction history changes again, they show up here again.
+              Lists are built from the search criteria you save in{" "}
+              <Link href="/preferences" className={linkClass}>Preferences</Link>.
             </p>
+            <ul className="list-inside list-disc space-y-1.5 pl-0.5 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400 sm:list-outside sm:pl-5">
+              <li>
+                You only see players with <strong className="font-medium text-neutral-800 dark:text-neutral-200">new or
+                unread</strong> updates.
+              </li>
+              <li>
+                We show at most <strong className="font-medium text-neutral-800 dark:text-neutral-200">
+                  {PROFILE_UPDATE_DISPLAY_LIMIT} players
+                </strong>{" "}
+                per profile at once.
+              </li>
+              <li>
+                <strong className="font-medium text-neutral-800 dark:text-neutral-200">Mark as read</strong> clears
+                the current list so the next batch can load.
+              </li>
+              <li>
+                If a player&apos;s transactions change again later, they can reappear here.
+              </li>
+            </ul>
           </div>
 
           <div className="portal-panel-well sm:p-5">
             {profilesOrdered.length === 0 ? (
-              <div className="portal-empty-well text-sm text-neutral-600 dark:text-neutral-400">
-                No saved profiles yet.{" "}
-                <Link href="/preferences" className={linkClass}>
-                  Create a profile
-                </Link>{" "}
-                to see matching players here.
+              <div className="portal-empty-well text-left text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+                <p className="font-medium text-neutral-800 dark:text-neutral-200">No saved profiles yet</p>
+                <p className="mt-2">
+                  Add a search profile in{" "}
+                  <Link href="/preferences" className={linkClass}>Preferences</Link>{" "}
+                  to see new matches for that criteria in this section.
+                </p>
               </div>
             ) : (
               <div className="flex flex-col gap-5">
@@ -304,12 +314,12 @@ export default function UpdatesPage() {
 
       <section>
         <div className="portal-filter-shell flex flex-col gap-4 sm:p-5">
-          <div className="portal-title-stack">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-              Players you follow
-            </h2>
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Players you follow</h2>
             <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-              Use the bell on any player card (next to the heart) to add or remove them here.
+              On any player card, tap the{" "}
+              <strong className="font-medium text-neutral-800 dark:text-neutral-200">bell</strong> next to the heart to
+              follow or unfollow. Players you follow appear here when there is something new to check.
             </p>
           </div>
 
@@ -319,8 +329,13 @@ export default function UpdatesPage() {
             ) : watchedError ? (
               <p className="text-sm text-red-700 dark:text-red-400">{watchedError}</p>
             ) : watchIds.length === 0 ? (
-              <div className="portal-empty-well text-sm text-neutral-600 dark:text-neutral-400">
-                No players yet. Open a player from discovery or favorites and tap the bell to track them for updates.
+              <div className="portal-empty-well text-left text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+                <p className="font-medium text-neutral-800 dark:text-neutral-200">You aren’t following anyone yet</p>
+                <p className="mt-2">
+                  Open a player from <Link href="/dashboard" className={linkClass}>Discovery</Link> or{" "}
+                  <Link href="/favorites" className={linkClass}>Favorites</Link>, then tap the bell on their card to add
+                  them here.
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

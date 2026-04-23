@@ -6,14 +6,13 @@
  */
 
 import Link from "next/link"
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { RefreshCw } from "lucide-react"
+import { ListFilter, Search, SlidersHorizontal } from "lucide-react"
+import { useEffect, useLayoutEffect, useMemo, useState } from "react"
 import { PlayerCard } from "@/components/discovery/PlayerCard"
 import { PreferenceFiltersPanel } from "@/components/discovery/PreferenceFiltersPanel"
 import { POSITION_FILTER_OPTIONS } from "@/components/discovery/DiscoveryFilterTypes"
 import type { UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
 import { fetchPlayerSummaries } from "@/lib/api"
-import { withBasePath } from "@/lib/base-path"
 import {
   buildDiscoveryListParams,
   type DiscoverySortOption,
@@ -117,11 +116,10 @@ export default function PlayerDiscoveryHomePage() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [refreshTick, setRefreshTick] = useState(0)
-  const [syncing, setSyncing] = useState(false)
-  const [syncBanner, setSyncBanner] = useState<{ variant: "success" | "error"; text: string } | null>(null)
   /** False until client applies optional return-from-profile snapshot (avoids fetch with default then snapshot). */
   const [discoveryReady, setDiscoveryReady] = useState(false)
+  const [nameSearchInput, setNameSearchInput] = useState("")
+  const [nameSearch, setNameSearch] = useState("")
 
   useLayoutEffect(() => {
     const snap = takeDiscoverySnapshot()
@@ -133,9 +131,18 @@ export default function PlayerDiscoveryHomePage() {
       setSort(snap.sort)
       setTransactionTypes(snap.transactionTypes)
       setCustomRankingPreferences(snap.customRankingPreferences)
+      setNameSearchInput(snap.nameSearch)
+      setNameSearch(snap.nameSearch)
     }
     setDiscoveryReady(true)
   }, [])
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setNameSearch(nameSearchInput.trim().slice(0, 200))
+    }, 250)
+    return () => clearTimeout(t)
+  }, [nameSearchInput])
 
   function refreshProfilesList() {
     setProfiles(loadProfiles())
@@ -172,6 +179,7 @@ export default function PlayerDiscoveryHomePage() {
         sort,
         transactionTypes,
         customRankingPreferences,
+        nameSearch,
       ),
     [
       searchMode,
@@ -182,11 +190,9 @@ export default function PlayerDiscoveryHomePage() {
       sort,
       transactionTypes,
       customRankingPreferences,
+      nameSearch,
     ],
   )
-
-  const filterParamsRef = useRef(filterParams)
-  filterParamsRef.current = filterParams
 
   /** Filter changes → first page with full loading state. */
   useEffect(() => {
@@ -204,6 +210,7 @@ export default function PlayerDiscoveryHomePage() {
       sort,
       transactionTypes,
       customRankingPreferences,
+      nameSearch,
     )
     fetchPlayerSummaries({
       ...params,
@@ -235,31 +242,8 @@ export default function PlayerDiscoveryHomePage() {
     sort,
     transactionTypes,
     customRankingPreferences,
+    nameSearch,
   ])
-
-  /** After “Refresh database” sync: reload first page without blanking the grid (sync button already shows progress). */
-  useEffect(() => {
-    if (refreshTick === 0) return
-    let cancelled = false
-    fetchPlayerSummaries({
-      ...filterParamsRef.current,
-      limit: DISCOVERY_HOME_PAGE_SIZE,
-      offset: 0,
-    })
-      .then(({ players: rows, total: t }) => {
-        if (!cancelled) {
-          setPlayers(dedupePlayersById(rows))
-          setTotal(t)
-          setError(null)
-        }
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load players")
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [refreshTick])
 
   async function handleLoadMore() {
     if (loadingMore || loading || players.length >= total) return
@@ -289,35 +273,6 @@ export default function PlayerDiscoveryHomePage() {
     }
   }
 
-  async function handleRefreshDatabase() {
-    setSyncing(true)
-    setSyncBanner(null)
-    try {
-      const res = await fetch(withBasePath("/trigger-sync"), { method: "POST" })
-      const body = (await res.json()) as {
-        ok?: boolean
-        error?: string
-        players?: number
-      }
-      if (!res.ok || body.ok === false) {
-        throw new Error(typeof body.error === "string" ? body.error : `Sync failed (${res.status})`)
-      }
-      const at = new Date().toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
-      setSyncBanner({
-        variant: "success",
-        text: `Database successfully updated at ${at}.`,
-      })
-      setRefreshTick((t) => t + 1)
-    } catch (e) {
-      setSyncBanner({
-        variant: "error",
-        text: e instanceof Error ? e.message : "Could not refresh the database.",
-      })
-    } finally {
-      setSyncing(false)
-    }
-  }
-
   const selectedProfile = profiles.find((p) => p.id === selectedProfileId)
   const hasRankingPreferencesConfigured =
     searchMode === "profile" ? Boolean(selectedProfile?.rankingPreferences) : Boolean(customRankingPreferences)
@@ -331,6 +286,7 @@ export default function PlayerDiscoveryHomePage() {
       sort,
       transactionTypes,
       customRankingPreferences,
+      nameSearch: nameSearchInput.trim().slice(0, 200),
     })
   }
 
@@ -376,249 +332,270 @@ export default function PlayerDiscoveryHomePage() {
   }
 
   return (
-    <main className="portal-page">
-      <header className="portal-page-header">
-        <div className="portal-title-stack">
-          <h1 className="text-3xl font-bold tracking-tight text-black dark:text-neutral-100">Player Discovery Home</h1>
-        </div>
-        <button
-          type="button"
-          onClick={handleRefreshDatabase}
-          disabled={syncing}
-          className="portal-btn-secondary shrink-0"
-          title="Fetch latest Baseball Cube feeds, parse, and upsert into PostgreSQL"
-        >
-          <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} aria-hidden />
-          {syncing ? "Refreshing…" : "Refresh database"}
-        </button>
-      </header>
+    <main className="portal-page mx-auto max-w-[1600px]">
+      <h1 className="sr-only">Player Discovery Home</h1>
 
-      {syncBanner ? (
-        <div
-          role="status"
-          className={`rounded-portal-sm border px-4 py-3 text-sm leading-relaxed ${
-            syncBanner.variant === "success"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-800/60 dark:bg-emerald-950/50 dark:text-emerald-100"
-              : "border-red-200 bg-red-50 text-red-950 dark:border-red-900/50 dark:bg-red-950/45 dark:text-red-100"
-          }`}
-        >
-          {syncBanner.text}
-        </div>
-      ) : null}
-
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-6">
-        <section className="flex w-full shrink-0 flex-col gap-4 lg:w-[420px] lg:flex-shrink-0">
-          <div className="portal-tablist" role="tablist" aria-label="Search source">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={searchMode === "custom"}
-              aria-current={searchMode === "custom" ? "true" : undefined}
-              onClick={() => setSearchMode("custom")}
-              className={`portal-tab ${searchMode === "custom" ? "portal-tab-active" : "portal-tab-inactive"}`}
-            >
-              Custom search
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={searchMode === "profile"}
-              aria-current={searchMode === "profile" ? "true" : undefined}
-              onClick={() => setSearchMode("profile")}
-              className={`portal-tab ${searchMode === "profile" ? "portal-tab-active" : "portal-tab-inactive"}`}
-            >
-              Saved profile
-            </button>
+      <div className="w-full max-w-md">
+        <label className="portal-field mb-0">
+          <span className="sr-only">Search by player name</span>
+          <div className="relative">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+              aria-hidden
+            />
+            <input
+              type="search"
+              value={nameSearchInput}
+              onChange={(e) => setNameSearchInput(e.target.value)}
+              placeholder="Search by name"
+              className="portal-control w-full pl-9"
+              autoComplete="off"
+            />
           </div>
+        </label>
+      </div>
 
-          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-            Sort &amp; order
-          </p>
-          <div className="portal-filter-shell space-y-3 sm:p-5">
-            <label className="portal-field">
-              Sort results
-              <select
-                value={sort}
-                onChange={(e) => {
-                  const next = e.target.value as DiscoverySortOption
-                  if (next === "ranking" && !hasRankingPreferencesConfigured) {
-                    openRankingModal()
-                    return
-                  }
-                  setSort(next)
-                  if (next === "transactionType") setTransactionTypeModalOpen(true)
-                }}
-                className="portal-control"
-              >
-                <option value="newestTransaction">Newest transactions (default)</option>
-                <option value="lastName">Last name</option>
-                <option value="transactionType">Transaction type</option>
-                <option value="ranking">Ranking score</option>
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={openRankingModal}
-              className="portal-btn-secondary w-full"
-            >
-              {hasRankingPreferencesConfigured ? "Ranking preferences: Set" : "Set ranking preferences"}
-            </button>
-            {sort === "transactionType" ? (
+      <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-8">
+        <section className="flex w-full shrink-0 flex-col gap-5 lg:sticky lg:top-[4.75rem] lg:w-[420px] lg:flex-shrink-0 lg:pr-1">
+          <div className="flex flex-col gap-5 rounded-portal-lg border border-neutral-200/70 bg-portal-surface/85 p-5 shadow-portal backdrop-blur-md dark:border-neutral-600/45 dark:bg-neutral-900/55">
+            <div className="portal-tablist" role="tablist" aria-label="Search source">
               <button
                 type="button"
-                onClick={() => setTransactionTypeModalOpen(true)}
-                className="portal-btn-secondary w-full"
+                role="tab"
+                aria-selected={searchMode === "custom"}
+                aria-current={searchMode === "custom" ? "true" : undefined}
+                onClick={() => setSearchMode("custom")}
+                className={`portal-tab ${searchMode === "custom" ? "portal-tab-active" : "portal-tab-inactive"}`}
               >
-                Choose transaction types ({transactionTypes.length} selected)
+                Custom search
               </button>
-            ) : null}
-          </div>
-
-          {searchMode === "custom" ? (
-            <div className="flex flex-col gap-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                Custom preferences
-              </p>
-              <PreferenceFiltersPanel
-                filters={customFilters}
-                onFiltersChange={setCustomFilters}
-                onlyWithStats={customOnlyWithStats}
-                onOnlyWithStatsChange={setCustomOnlyWithStats}
-              />
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={searchMode === "profile"}
+                aria-current={searchMode === "profile" ? "true" : undefined}
+                onClick={() => setSearchMode("profile")}
+                className={`portal-tab ${searchMode === "profile" ? "portal-tab-active" : "portal-tab-inactive"}`}
+              >
                 Saved profile
-              </p>
-              {profiles.length === 0 ? (
-                <div className="rounded-portal-sm border border-dashed border-portal-filter-border bg-portal-surface px-3 py-4 text-sm leading-relaxed text-neutral-600 dark:border-neutral-600 dark:text-neutral-400">
-                  No profiles yet.{" "}
-                  <Link href="/preferences" className="portal-link text-sm">
-                    Create profiles in Preferences
-                  </Link>{" "}
-                  with the search fields you want, then return here.
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  <label className="portal-field">
-                    Profile
-                    <select
-                      value={selectedProfileId}
-                      onChange={(e) => setSelectedProfileId(e.target.value)}
-                      className="portal-control"
-                    >
-                      {profiles.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {selectedProfile ? (
-                    <p className="text-xs leading-relaxed text-neutral-500 dark:text-neutral-500">
-                      {selectedProfile.filters.length === 0
-                        ? "No row filters · "
-                        : `${selectedProfile.filters.length} preference row(s) · `}
-                      {selectedProfile.onlyWithStats ? "Stats required" : "Stats optional"}
-                    </p>
-                  ) : null}
-                  <p className="text-xs text-neutral-500 dark:text-neutral-500">
-                    <Link href="/preferences" className="portal-link text-sm">
-                      Preferences
-                    </Link>{" "}
-                    — edit names and criteria
-                  </p>
-                </div>
-              )}
+              </button>
             </div>
-          )}
+
+            <div>
+              <p className="mb-2.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500 dark:text-neutral-400">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-portal-accent/80" aria-hidden />
+                Sort &amp; order
+              </p>
+              <div className="portal-filter-shell space-y-3 sm:p-5">
+                <label className="portal-field">
+                  Sort results
+                  <select
+                    value={sort}
+                    onChange={(e) => {
+                      const next = e.target.value as DiscoverySortOption
+                      if (next === "ranking" && !hasRankingPreferencesConfigured) {
+                        openRankingModal()
+                        return
+                      }
+                      setSort(next)
+                      if (next === "transactionType") setTransactionTypeModalOpen(true)
+                    }}
+                    className="portal-control"
+                  >
+                    <option value="newestTransaction">Newest transactions (default)</option>
+                    <option value="lastName">Last name</option>
+                    <option value="transactionType">Transaction type</option>
+                    <option value="ranking">Ranking score</option>
+                  </select>
+                </label>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={openRankingModal}
+                    className="portal-btn-secondary inline-flex w-full items-center justify-center gap-2"
+                  >
+                    <SlidersHorizontal className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+                    {hasRankingPreferencesConfigured ? "Edit ranking weights" : "Set ranking weights"}
+                  </button>
+                  {sort === "transactionType" ? (
+                    <button
+                      type="button"
+                      onClick={() => setTransactionTypeModalOpen(true)}
+                      className="portal-btn-secondary inline-flex w-full items-center justify-center gap-2"
+                    >
+                      <ListFilter className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+                      Transaction types
+                      <span className="tabular-nums">({transactionTypes.length})</span>
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {searchMode === "custom" ? (
+              <div className="flex flex-col gap-3">
+                <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500 dark:text-neutral-400">
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-portal-accent/80" aria-hidden />
+                  Custom preferences
+                </p>
+                <PreferenceFiltersPanel
+                  filters={customFilters}
+                  onFiltersChange={setCustomFilters}
+                  onlyWithStats={customOnlyWithStats}
+                  onOnlyWithStatsChange={setCustomOnlyWithStats}
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500 dark:text-neutral-400">
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-portal-accent/80" aria-hidden />
+                  Saved profile
+                </p>
+                {profiles.length === 0 ? (
+                  <div className="rounded-portal border border-dashed border-portal-filter-border bg-portal-filter-bg/50 px-4 py-5 text-sm leading-relaxed text-neutral-600 dark:border-neutral-600 dark:bg-neutral-800/40 dark:text-neutral-400">
+                    No profiles yet.{" "}
+                    <Link href="/preferences" className="portal-link text-sm">
+                      Create profiles in Preferences
+                    </Link>{" "}
+                    with the search fields you want, then return here.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    <label className="portal-field">
+                      Profile
+                      <select
+                        value={selectedProfileId}
+                        onChange={(e) => setSelectedProfileId(e.target.value)}
+                        className="portal-control"
+                      >
+                        {profiles.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {selectedProfile ? (
+                      <p className="text-xs leading-relaxed text-neutral-500 dark:text-neutral-500">
+                        {selectedProfile.filters.length === 0
+                          ? "No row filters · "
+                          : `${selectedProfile.filters.length} preference row(s) · `}
+                        {selectedProfile.onlyWithStats ? "Stats required" : "Stats optional"}
+                      </p>
+                    ) : null}
+                    <p className="text-xs text-neutral-500 dark:text-neutral-500">
+                      <Link href="/preferences" className="portal-link text-sm">
+                        Preferences
+                      </Link>{" "}
+                      — edit names and criteria
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </section>
 
         <section className="min-w-0 w-full flex-1 lg:min-w-0">
-          <div className="portal-panel-well min-h-[480px] w-full min-w-0 sm:p-5">
-            {loading ? (
-              <div
-                className="grid grid-cols-2 gap-3 sm:gap-4"
-                style={{ gridTemplateRows: "repeat(4, minmax(0, 1fr))" }}
-                aria-busy
-                aria-label="Loading players"
-              >
-                {Array.from({ length: DISCOVERY_HOME_PAGE_SIZE }, (_, i) => (
-                  <div
-                    key={i}
-                    className="flex min-h-[112px] min-w-0 animate-pulse gap-3 rounded-portal border border-neutral-200/80 bg-portal-surface p-3 shadow-portal-card dark:border-neutral-600/40"
-                  >
-                    <div className="h-[88px] w-[88px] shrink-0 rounded-full bg-neutral-200" />
-                    <div className="min-w-0 flex-1 space-y-2 py-1">
-                      <div className="h-3.5 w-[72%] rounded bg-neutral-200" />
-                      <div className="h-3 w-[40%] rounded bg-neutral-200" />
-                      <div className="h-3 w-[55%] rounded bg-neutral-200" />
-                      <div className="h-3 w-full rounded bg-neutral-200" />
+          <div className="overflow-hidden rounded-portal-lg border border-neutral-200/60 bg-gradient-to-b from-portal-surface via-portal-surface to-portal-filter-bg/25 shadow-portal dark:border-neutral-600/40 dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-900/95">
+            {!loading && !error && players.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-3 border-b border-neutral-200/60 px-4 py-3.5 sm:px-5 dark:border-neutral-700/50">
+                <span className="portal-badge tabular-nums text-sm">{total}</span>
+                <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">players match your criteria</span>
+              </div>
+            ) : null}
+            <div className="portal-panel-well min-h-[min(480px,70vh)] w-full min-w-0 border-0 bg-transparent shadow-none sm:p-5">
+              {loading ? (
+                <div
+                  className="grid grid-cols-2 gap-3 sm:gap-4"
+                  style={{ gridTemplateRows: "repeat(4, minmax(0, 1fr))" }}
+                  aria-busy
+                  aria-label="Loading players"
+                >
+                  {Array.from({ length: DISCOVERY_HOME_PAGE_SIZE }, (_, i) => (
+                    <div
+                      key={i}
+                      className="flex min-h-[112px] min-w-0 animate-pulse gap-3 rounded-portal border border-neutral-200/60 bg-portal-surface/90 p-3 shadow-portal-card dark:border-neutral-600/35 dark:bg-neutral-800/50"
+                    >
+                      <div className="h-[88px] w-[88px] shrink-0 rounded-full bg-neutral-200/90 dark:bg-neutral-700" />
+                      <div className="min-w-0 flex-1 space-y-2 py-1">
+                        <div className="h-3.5 w-[72%] rounded-md bg-neutral-200/90 dark:bg-neutral-700" />
+                        <div className="h-3 w-[40%] rounded-md bg-neutral-200/90 dark:bg-neutral-700" />
+                        <div className="h-3 w-[55%] rounded-md bg-neutral-200/90 dark:bg-neutral-700" />
+                        <div className="h-3 w-full rounded-md bg-neutral-200/90 dark:bg-neutral-700" />
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : error ? (
-              <div className="rounded-portal-sm border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
-                <p className="font-semibold">Could not load players</p>
-                <p className="mt-1 leading-relaxed text-amber-900/90">{error}</p>
-              </div>
-            ) : players.length === 0 ? (
-              <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-                No players match these filters. If the database is empty, use{" "}
-                <strong>Refresh database</strong> above (or run{" "}
-                <code className="rounded bg-portal-chrome/80 px-1 py-0.5 text-xs dark:bg-neutral-800/80">
-                  npm run sync -w @available-player-portal/api
-                </code>
-                ), then the list will reload.
-              </p>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:gap-5">
-                  {players.map((p) => (
-                    <PlayerCard
-                      key={p.id}
-                      player={p}
-                      className="!max-w-none min-w-0"
-                      onBeforeNavigate={saveDiscoverySnapshotBeforeProfile}
-                    />
                   ))}
                 </div>
-                <div className="mt-6 flex flex-col items-stretch gap-4 border-t border-neutral-200/80 pt-5 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-center text-sm text-neutral-600 dark:text-neutral-400 sm:text-left">
-                    <span className="font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
-                      {players.length}
-                    </span>
-                    {" of "}
-                    <span className="font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">{total}</span>
-                    {" total results shown"}
-                  </p>
-                  <div className="flex flex-wrap justify-center gap-2 sm:justify-end">
-                    {players.length < total ? (
-                      <button
-                        type="button"
-                        onClick={() => void handleLoadMore()}
-                        disabled={loading || loadingMore}
-                        className="portal-btn-secondary min-w-[7rem] shrink-0 disabled:opacity-50"
-                      >
-                        {loadingMore ? "Loading…" : "Load more"}
-                      </button>
-                    ) : null}
-                  </div>
+              ) : error ? (
+                <div className="rounded-portal border border-amber-200/90 bg-amber-50/95 px-4 py-4 text-sm text-amber-950 shadow-sm dark:border-amber-900/45 dark:bg-amber-950/35 dark:text-amber-100">
+                  <p className="font-semibold">Could not load players</p>
+                  <p className="mt-1.5 leading-relaxed text-amber-900/85 dark:text-amber-100/90">{error}</p>
                 </div>
-              </>
-            )}
+              ) : players.length === 0 ? (
+                <div className="portal-empty-well border-neutral-200/70 dark:border-neutral-600">
+                  <p className="mx-auto max-w-md text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+                    No players match these filters. If data is still syncing, try again shortly. For local development
+                    run{" "}
+                    <code className="rounded-md bg-portal-chrome/90 px-1.5 py-0.5 text-xs dark:bg-neutral-800">
+                      npm run sync -w @available-player-portal/api
+                    </code>
+                    .
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:gap-5">
+                    {players.map((p) => (
+                      <PlayerCard
+                        key={p.id}
+                        player={p}
+                        className="!max-w-none min-w-0 transition duration-200 hover:-translate-y-0.5 hover:shadow-portal"
+                        onBeforeNavigate={saveDiscoverySnapshotBeforeProfile}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-6 flex flex-col items-stretch gap-4 rounded-portal-sm border border-neutral-200/50 bg-portal-filter-bg/40 px-4 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-neutral-700/45 dark:bg-neutral-800/35">
+                    <p className="text-center text-sm text-neutral-600 dark:text-neutral-400 sm:text-left">
+                      Showing{" "}
+                      <span className="font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
+                        {players.length}
+                      </span>
+                      {" of "}
+                      <span className="font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">{total}</span>
+                    </p>
+                    <div className="flex flex-wrap justify-center gap-2 sm:justify-end">
+                      {players.length < total ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleLoadMore()}
+                          disabled={loading || loadingMore}
+                          className="portal-btn-primary min-w-[7.5rem] shrink-0 disabled:opacity-50"
+                        >
+                          {loadingMore ? "Loading…" : "Load more"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </section>
       </div>
       {transactionTypeModalOpen ? (
-        <div className="portal-modal-overlay px-4">
+        <div
+          className="portal-modal-overlay px-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setTransactionTypeModalOpen(false)
+          }}
+        >
           <div
             className="portal-modal-card max-w-sm"
             role="dialog"
             aria-modal="true"
             aria-labelledby="tx-type-modal-title"
+            onClick={(e) => e.stopPropagation()}
           >
             <h3
               id="tx-type-modal-title"
@@ -629,6 +606,17 @@ export default function PlayerDiscoveryHomePage() {
             <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
               Players are sorted by newest matching transaction.
             </p>
+            <div className="mt-2">
+              <button
+                type="button"
+                className="text-sm font-semibold text-portal-accent underline-offset-2 transition hover:text-portal-accent-hover hover:underline dark:text-portal-accent"
+                onClick={() => {
+                  setTransactionTypes(["retired", "released", "freeAgent"])
+                }}
+              >
+                Select all types
+              </button>
+            </div>
             <div className="portal-modal-inset mt-3 space-y-2">
               <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-800 dark:text-neutral-200">
                 <input
@@ -658,21 +646,14 @@ export default function PlayerDiscoveryHomePage() {
                 Free agent
               </label>
             </div>
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setTransactionTypes(["retired", "released", "freeAgent"])
-                  setTransactionTypeModalOpen(false)
-                }}
-                className="portal-btn-secondary-sm"
-              >
-                Select all
-              </button>
+            <div className="mt-5 flex flex-col border-t border-neutral-200/80 pt-4 dark:border-neutral-700/80 sm:flex-row sm:justify-end">
+              <p className="mb-2 text-center text-xs text-neutral-500 sm:mb-0 sm:mr-auto sm:self-center sm:text-left dark:text-neutral-500">
+                Changes apply as you tap; close when you’re done.
+              </p>
               <button
                 type="button"
                 onClick={() => setTransactionTypeModalOpen(false)}
-                className="portal-btn-primary"
+                className="portal-btn-primary w-full min-h-[2.5rem] sm:min-w-[6.5rem] sm:w-auto"
               >
                 Done
               </button>
@@ -681,12 +662,18 @@ export default function PlayerDiscoveryHomePage() {
         </div>
       ) : null}
       {rankingModalOpen ? (
-        <div className="portal-modal-overlay px-4">
+        <div
+          className="portal-modal-overlay px-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setRankingModalOpen(false)
+          }}
+        >
           <div
             className="portal-modal-card max-w-xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="ranking-modal-title"
+            onClick={(e) => e.stopPropagation()}
           >
             <h3
               id="ranking-modal-title"
@@ -820,15 +807,19 @@ export default function PlayerDiscoveryHomePage() {
             {!rankingTargetPositionValid ? (
               <p className="mt-1 text-xs text-red-600">Please select a target position.</p>
             ) : null}
-            <div className="mt-4 flex flex-wrap justify-end gap-2">
-              <button type="button" onClick={() => setRankingModalOpen(false)} className="portal-btn-ghost">
+            <div className="portal-modal-footer !mt-5">
+              <button
+                type="button"
+                onClick={() => setRankingModalOpen(false)}
+                className="portal-btn-ghost w-full sm:min-w-[5.5rem] sm:w-auto"
+              >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={saveRankingPreferences}
                 disabled={!rankingWeightsValid || !rankingTargetPositionValid}
-                className="portal-btn-primary"
+                className="portal-btn-primary w-full min-h-[2.5rem] sm:min-w-[5.5rem] sm:w-auto"
               >
                 Save
               </button>

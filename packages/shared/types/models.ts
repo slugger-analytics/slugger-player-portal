@@ -129,6 +129,11 @@ export interface PlayerFilters {
   /** Exact match on {@link Player.throws} (L, R). Query: `throws`. */
   throws?: ThrowHand
   rankingPreferences?: RankingPreferences
+  /**
+   * Substring match on `Player.name` (case-insensitive). Query: `nameSearch`, `search`, or `q`.
+   * Applied with other filters for discovery list + count.
+   */
+  nameSearch?: string
 }
 
 /** Allowed “Last X days” preference values (transaction recency window). */

@@ -48,23 +48,14 @@ export default function HistoryPage() {
 
   return (
     <main className="portal-page">
-      <header className="portal-page-header">
-        <div className="portal-title-stack">
-          <h1 className="text-3xl font-bold tracking-tight text-black dark:text-neutral-100">History</h1>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            Players you open are tracked here in recent-to-oldest order.
-          </p>
-        </div>
-        {entries.length > 0 ? (
-          <button
-            type="button"
-            onClick={clearAll}
-            className="portal-btn-secondary shrink-0"
-          >
+      <h1 className="sr-only">History</h1>
+      {entries.length > 0 ? (
+        <div className="flex justify-end">
+          <button type="button" onClick={clearAll} className="portal-btn-secondary shrink-0">
             Clear all
           </button>
-        ) : null}
-      </header>
+        </div>
+      ) : null}
 
       <div className="portal-panel-well max-w-xl sm:p-5">
         {entries.length === 0 ? (

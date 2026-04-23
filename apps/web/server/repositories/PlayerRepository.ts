@@ -33,6 +33,10 @@ export class PlayerRepository {
     opts?: { omitLastTransactionRecency?: boolean },
   ): Prisma.PlayerWhereInput[] {
     const clauses: Prisma.PlayerWhereInput[] = []
+    const nameQ = filters.nameSearch?.trim()
+    if (nameQ) {
+      clauses.push({ name: { contains: nameQ.slice(0, 200), mode: "insensitive" } })
+    }
     if (filters.position) {
       const raw = filters.position.trim()
       const fp = raw.toLowerCase()

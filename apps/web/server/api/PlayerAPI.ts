@@ -214,6 +214,12 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
   const transactionTypes = parseTransactionTypesQuery(query)
   const rankingPreferences = parseRankingPreferencesQuery(query)
 
+  const nameSearchRaw = firstString(query.nameSearch) ?? firstString(query.search) ?? firstString(query.q)
+  const nameSearch =
+    nameSearchRaw == null || nameSearchRaw.trim() === ""
+      ? undefined
+      : nameSearchRaw.trim().slice(0, 200)
+
   return {
     position,
     status,
@@ -232,6 +238,7 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     bats,
     throws,
     rankingPreferences,
+    nameSearch,
   }
 }
 

@@ -85,8 +85,9 @@ export default function PreferencesPage() {
 
   return (
     <main className="portal-page">
-      <header className="portal-page-header">
-        <div className="portal-title-stack max-w-2xl">
+      <h1 className="sr-only">Preferences</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="max-w-2xl">
           <Link
             href="/dashboard"
             className="inline-flex items-center gap-1.5 text-sm font-semibold text-portal-accent underline transition hover:text-portal-accent-hover"
@@ -94,12 +95,6 @@ export default function PreferencesPage() {
             <ArrowLeft className="h-4 w-4" aria-hidden />
             Back to home
           </Link>
-          <h1 className="text-3xl font-bold tracking-tight text-black dark:text-neutral-100">Preferences</h1>
-          <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-            Create <strong>player profiles</strong> with manual search criteria (position, age, team, status, max
-            experience level, and whether stats are required). Use them on the home page under{" "}
-            <strong>Saved profile</strong>.
-          </p>
         </div>
         {!editor ? (
           <button
@@ -111,7 +106,7 @@ export default function PreferencesPage() {
             New profile
           </button>
         ) : null}
-      </header>
+      </div>
 
       {editor ? (
         <section>

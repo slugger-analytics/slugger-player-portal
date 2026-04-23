@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react"
+import { createPortal } from "react-dom"
 import { ChevronDown, MoreVertical, Plus, UserRound } from "lucide-react"
 import { FilterModal } from "@/components/discovery/FilterModal"
 import {
@@ -23,6 +24,59 @@ export function PreferenceFiltersPanel({ filters, onFiltersChange, onlyWithStats
     { mode: "add"; presetKind?: FilterKind } | { mode: "edit"; filter: UiFilter } | null
   >(null)
 
+  const addPrefsBtnRef = useRef<HTMLButtonElement>(null)
+  const [addPrefsMenuStyle, setAddPrefsMenuStyle] = useState<CSSProperties | null>(null)
+
+  function measureAddPrefsMenu() {
+    const el = addPrefsBtnRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const gap = 6
+    const edgePad = 8
+    const vh = window.innerHeight
+    const spaceBelow = vh - r.bottom - edgePad
+    const spaceAbove = r.top - edgePad
+    const openUp = spaceBelow < 220 && spaceAbove > spaceBelow
+    const maxH = (openUp ? Math.min(320, spaceAbove) : Math.min(320, spaceBelow - gap)) || 200
+    setAddPrefsMenuStyle(
+      openUp
+        ? {
+            position: "fixed",
+            left: r.left,
+            width: Math.max(200, r.width),
+            maxHeight: maxH,
+            bottom: vh - r.top + gap,
+            zIndex: 200,
+          }
+        : {
+            position: "fixed",
+            top: r.bottom + gap,
+            left: r.left,
+            width: Math.max(200, r.width),
+            maxHeight: maxH,
+            zIndex: 200,
+          },
+    )
+  }
+
+  useLayoutEffect(() => {
+    if (!addPrefsOpen) {
+      setAddPrefsMenuStyle(null)
+      return
+    }
+    measureAddPrefsMenu()
+  }, [addPrefsOpen])
+
+  useEffect(() => {
+    if (!addPrefsOpen) return
+    window.addEventListener("resize", measureAddPrefsMenu)
+    document.addEventListener("scroll", measureAddPrefsMenu, true)
+    return () => {
+      window.removeEventListener("resize", measureAddPrefsMenu)
+      document.removeEventListener("scroll", measureAddPrefsMenu, true)
+    }
+  }, [addPrefsOpen])
+
   useEffect(() => {
     if (!menuFor) return
     const onPointerDown = (e: PointerEvent) => {
@@ -38,9 +92,9 @@ export function PreferenceFiltersPanel({ filters, onFiltersChange, onlyWithStats
   useEffect(() => {
     if (!addPrefsOpen) return
     const onPointerDown = (e: PointerEvent) => {
-      const el = e.target as HTMLElement | null
-      if (!el) return
-      if (el.closest("[data-add-prefs-root]")) return
+      const t = e.target as HTMLElement | null
+      if (!t) return
+      if (t.closest("[data-add-prefs-root]") || t.closest("[data-add-prefs-menu]")) return
       setAddPrefsOpen(false)
     }
     document.addEventListener("pointerdown", onPointerDown)
@@ -123,13 +177,14 @@ export function PreferenceFiltersPanel({ filters, onFiltersChange, onlyWithStats
 
       <div className="relative mt-4" data-add-prefs-root>
         <button
+          ref={addPrefsBtnRef}
           type="button"
           aria-expanded={addPrefsOpen}
           aria-haspopup="listbox"
           aria-controls="add-preferences-menu"
           id="add-preferences-button"
           onClick={() => setAddPrefsOpen((o) => !o)}
-          className="portal-btn-secondary h-11 w-full"
+          className="portal-btn-primary inline-flex h-11 w-full items-center justify-center gap-2"
         >
           <Plus className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
           Add preferences
@@ -138,30 +193,35 @@ export function PreferenceFiltersPanel({ filters, onFiltersChange, onlyWithStats
             aria-hidden
           />
         </button>
-        {addPrefsOpen ? (
-          <ul
-            id="add-preferences-menu"
-            role="listbox"
-            aria-labelledby="add-preferences-button"
-            className="portal-menu absolute left-0 right-0 top-[calc(100%+6px)] z-30"
-          >
-            {ADD_PREFERENCE_OPTIONS.map(({ kind, label }) => (
-              <li key={kind} role="none">
-                <button
-                  type="button"
-                  role="option"
-                  className="portal-menu-item"
-                  onClick={() => {
-                    setAddPrefsOpen(false)
-                    setModal({ mode: "add", presetKind: kind })
-                  }}
-                >
-                  {label}
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        {addPrefsOpen && addPrefsMenuStyle && typeof document !== "undefined"
+          ? createPortal(
+              <ul
+                id="add-preferences-menu"
+                data-add-prefs-menu
+                role="listbox"
+                aria-labelledby="add-preferences-button"
+                style={addPrefsMenuStyle}
+                className="portal-menu m-0 max-h-[min(20rem,55dvh)] list-none py-1"
+              >
+                {ADD_PREFERENCE_OPTIONS.map(({ kind, label }) => (
+                  <li key={kind} role="none">
+                    <button
+                      type="button"
+                      role="option"
+                      className="portal-menu-item"
+                      onClick={() => {
+                        setAddPrefsOpen(false)
+                        setModal({ mode: "add", presetKind: kind })
+                      }}
+                    >
+                      {label}
+                    </button>
+                  </li>
+                ))}
+              </ul>,
+              document.body,
+            )
+          : null}
       </div>
 
       {modal ? (
