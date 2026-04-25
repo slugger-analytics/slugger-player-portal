@@ -10,6 +10,7 @@ import { ListFilter, Search, SlidersHorizontal } from "lucide-react"
 import { useEffect, useLayoutEffect, useMemo, useState } from "react"
 import { PlayerCard } from "@/components/discovery/PlayerCard"
 import { PreferenceFiltersPanel } from "@/components/discovery/PreferenceFiltersPanel"
+import { SortOrderButton } from "@/components/discovery/SortOrderButton"
 import { POSITION_FILTER_OPTIONS } from "@/components/discovery/DiscoveryFilterTypes"
 import type { UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
 import { fetchPlayerSummaries } from "@/lib/api"
@@ -335,28 +336,30 @@ export default function PlayerDiscoveryHomePage() {
     <main className="portal-page mx-auto max-w-[1600px]">
       <h1 className="sr-only">Player Discovery Home</h1>
 
-      <div className="w-full max-w-md">
-        <label className="portal-field mb-0">
-          <span className="sr-only">Search by player name</span>
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
-              aria-hidden
-            />
-            <input
-              type="search"
-              value={nameSearchInput}
-              onChange={(e) => setNameSearchInput(e.target.value)}
-              placeholder="Search by name"
-              className="portal-control w-full pl-9"
-              autoComplete="off"
-            />
-          </div>
-        </label>
-      </div>
-
       <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-8">
-        <section className="flex w-full shrink-0 flex-col gap-5 lg:sticky lg:top-[4.75rem] lg:w-[420px] lg:flex-shrink-0 lg:pr-1">
+        <section
+          className="flex w-full shrink-0 flex-col gap-3 self-start lg:sticky lg:top-[4.75rem] lg:z-10 lg:max-h-[calc(100dvh-5.5rem)] lg:w-[420px] lg:max-w-[420px] lg:overflow-y-auto lg:overscroll-y-contain lg:pr-1"
+          aria-label="Search and filters"
+        >
+          <div className="w-full">
+            <label className="portal-field mb-0">
+              <span className="sr-only">Search by player name</span>
+              <div className="relative">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400"
+                  aria-hidden
+                />
+                <input
+                  type="search"
+                  value={nameSearchInput}
+                  onChange={(e) => setNameSearchInput(e.target.value)}
+                  placeholder="Search by name"
+                  className="portal-control w-full pl-9"
+                  autoComplete="off"
+                />
+              </div>
+            </label>
+          </div>
           <div className="flex flex-col gap-5 rounded-portal-lg border border-neutral-200/70 bg-portal-surface/85 p-5 shadow-portal backdrop-blur-md dark:border-neutral-600/45 dark:bg-neutral-900/55">
             <div className="portal-tablist" role="tablist" aria-label="Search source">
               <button
@@ -387,27 +390,17 @@ export default function PlayerDiscoveryHomePage() {
                 Sort &amp; order
               </p>
               <div className="portal-filter-shell space-y-3 sm:p-5">
-                <label className="portal-field">
-                  Sort results
-                  <select
-                    value={sort}
-                    onChange={(e) => {
-                      const next = e.target.value as DiscoverySortOption
-                      if (next === "ranking" && !hasRankingPreferencesConfigured) {
-                        openRankingModal()
-                        return
-                      }
-                      setSort(next)
-                      if (next === "transactionType") setTransactionTypeModalOpen(true)
-                    }}
-                    className="portal-control"
-                  >
-                    <option value="newestTransaction">Newest transactions (default)</option>
-                    <option value="lastName">Last name</option>
-                    <option value="transactionType">Transaction type</option>
-                    <option value="ranking">Ranking score</option>
-                  </select>
-                </label>
+                <SortOrderButton
+                  sort={sort}
+                  onSelectSort={(next) => {
+                    if (next === "ranking" && !hasRankingPreferencesConfigured) {
+                      openRankingModal()
+                      return
+                    }
+                    setSort(next)
+                    if (next === "transactionType") setTransactionTypeModalOpen(true)
+                  }}
+                />
                 <div className="space-y-2">
                   <button
                     type="button"
