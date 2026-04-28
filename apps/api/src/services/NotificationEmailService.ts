@@ -28,7 +28,7 @@ export class NotificationEmailService {
         : []),
       "",
       "Open the Player Portal Updates page:",
-      "https://www.alpb-analytics.com/widgets/player-portal/updates",
+      "https://www.alpb-analytics.com/player-portal-updates",
       "",
       `Sync key: ${input.syncRunKey}`,
     ].join("\n")
@@ -91,7 +91,7 @@ export class NotificationEmailService {
       "<p style=\"margin: 0 0 12px;\">Players matching your saved profiles or watched list were updated:</p>",
       `<ul style="margin: 0; padding-left: 20px;">${listItems}</ul>`,
       overflowNotice,
-      '<p style="margin: 16px 0 0;"><a href="https://www.alpb-analytics.com/widgets/player-portal/updates">Open Player Portal Updates</a></p>',
+      '<p style="margin: 16px 0 0;"><a href="https://www.alpb-analytics.com/player-portal-updates">Open Player Portal Updates</a></p>',
       `<p style="margin: 12px 0 0; color: #6b7280; font-size: 12px;">Sync key: ${safeSyncKey}</p>`,
       "</div>",
     ].join("")
