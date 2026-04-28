@@ -55,8 +55,11 @@ export function UpdatesWatchProvider({ children }: { children: ReactNode }) {
   const addWatch = useCallback(
     (playerId: string) => {
       if (watchIds.includes(playerId)) return
-      void addWatchOnServer(playerId).then(() => {
-        persist(readUpdatesWatchIds())
+      const next = [...watchIds, playerId]
+      // Update immediately so bell toggles even if API call fails.
+      persist(next)
+      void addWatchOnServer(playerId).catch(() => {
+        /* keep local fallback */
       })
     },
     [watchIds, persist],
@@ -64,11 +67,13 @@ export function UpdatesWatchProvider({ children }: { children: ReactNode }) {
 
   const removeWatch = useCallback(
     (playerId: string) => {
-      void removeWatchOnServer(playerId).then(() => {
-        persist(readUpdatesWatchIds())
+      const next = watchIds.filter((id) => id !== playerId)
+      persist(next)
+      void removeWatchOnServer(playerId).catch(() => {
+        /* keep local fallback */
       })
     },
-    [persist],
+    [watchIds, persist],
   )
 
   const toggleWatch = useCallback(
