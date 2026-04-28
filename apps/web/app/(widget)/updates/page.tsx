@@ -78,7 +78,10 @@ export default function UpdatesPage() {
     refreshProfiles()
     refreshEvents()
     const onVis = () => {
-      if (document.visibilityState === "visible") refreshProfiles()
+      if (document.visibilityState === "visible") {
+        refreshProfiles()
+        refreshEvents()
+      }
     }
     document.addEventListener("visibilitychange", onVis)
     return () => document.removeEventListener("visibilitychange", onVis)
@@ -240,7 +243,7 @@ export default function UpdatesPage() {
                   const players = state?.players ?? []
                   const matchTotal = state?.matchTotal
                   const latestProfileEvent = events.find(
-                    (event) => event.type === "PROFILE" && event.savedProfile?.id === p.id && !event.readAt,
+                    (event) => event.type === "PROFILE" && event.savedProfile?.id === p.id,
                   )
                   const caughtUp =
                     !state?.loading && !state?.error && players.length === 0 && matchTotal != null && matchTotal > 0

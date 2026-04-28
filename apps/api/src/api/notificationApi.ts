@@ -1,8 +1,10 @@
 import { Router } from "express"
 import { NotificationRepository } from "../repositories/NotificationRepository"
 import { requireNotificationIdentity } from "../middleware/notificationAuth"
+import { NotificationEmailService } from "../services/NotificationEmailService"
 
 const repo = new NotificationRepository()
+const emailService = new NotificationEmailService()
 
 function asString(v: unknown): string | null {
   return typeof v === "string" && v.trim().length > 0 ? v.trim() : null
@@ -95,6 +97,44 @@ export function createNotificationRouter(): Router {
         : []
       await repo.markEventsRead(userId, eventIds)
       res.json({ ok: true })
+    } catch (error) {
+      next(error)
+    }
+  })
+
+  r.post("/test-email", async (req, res, next) => {
+    try {
+      const identity = req.notificationIdentity!
+      const requestedEventIds = Array.isArray(req.body?.eventIds)
+        ? req.body.eventIds.filter((id: unknown): id is string => typeof id === "string")
+        : []
+      const rows = await repo.listRecentEvents(identity.userId)
+      const selected =
+        requestedEventIds.length > 0
+          ? rows.filter((row) => requestedEventIds.includes(row.id))
+          : rows.slice(0, 10)
+      const lines =
+        selected.length > 0
+          ? selected.map((row) => {
+              if (row.type === "PROFILE") {
+                return `${row.player.name} matched profile "${row.savedProfile?.name ?? "Saved profile"}"`
+              }
+              return `${row.player.name} had an update from your watched list`
+            })
+          : ["Test notification: no recent events were available for this user."]
+      const syncRunKey = `manual-test-${new Date().toISOString()}`
+      await emailService.sendMatchSummary({
+        to: identity.email,
+        syncRunKey,
+        lines,
+      })
+      res.json({
+        ok: true,
+        to: identity.email,
+        syncRunKey,
+        eventCount: selected.length,
+        webhookConfigured: Boolean(process.env.NOTIFICATION_EMAIL_WEBHOOK_URL?.trim()),
+      })
     } catch (error) {
       next(error)
     }
