@@ -72,8 +72,19 @@ async function errorDetailFromResponse(res: Response): Promise<string> {
   return t.length > 200 ? `${t.slice(0, 200)}…` : t
 }
 
+function isLocalDevHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
+}
+
 function notificationIdentityHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {}
+
+  // In production/staging, avoid cross-account leakage via stale localStorage overrides.
+  // Identity headers should come from real Cognito-aware host integration.
+  if (!isLocalDevHost(window.location.hostname)) {
+    return {}
+  }
+
   const sub =
     window.localStorage.getItem("slugger-cognito-sub") ??
     process.env.NEXT_PUBLIC_NOTIFICATION_DEV_COGNITO_SUB ??

@@ -20,7 +20,8 @@ function parseIdentity(req: Request): { cognitoSub: string; email: string } | nu
   const email = req.header("x-slugger-email")?.trim()
   if (sub && email) return { cognitoSub: sub, email }
 
-  // Dev fallback for local portal testing.
+  // Dev fallback for local portal testing only.
+  if (process.env.NODE_ENV === "production") return null
   const devSub = process.env.NOTIFICATION_DEV_COGNITO_SUB?.trim()
   const devEmail = process.env.NOTIFICATION_DEV_EMAIL?.trim()
   if (devSub && devEmail) return { cognitoSub: devSub, email: devEmail }
