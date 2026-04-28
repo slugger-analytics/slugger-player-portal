@@ -22,6 +22,7 @@
 import cors from "cors"
 import express from "express"
 import { createPlayerRouter } from "./api/PlayerAPI"
+import { createNotificationRouter } from "./api/notificationApi"
 import { createSyncRouter } from "./api/syncApi"
 import { config } from "./config"
 import { prisma } from "./lib/prisma"
@@ -44,13 +45,13 @@ function apiPathPrefixFromEnv(): string {
 const productionApiPrefix = apiPathPrefixFromEnv()
 /** When BASE_PATH is set, still mount the same routes at `/` for local clients that use a bare origin. */
 const alsoMountAtRoot = Boolean(productionApiPrefix)
-
 function mountApiRoutes(pathPrefix: string): void {
   const p = pathPrefix.replace(/\/$/, "")
   app.get(`${p}/health`, (_req, res) => {
     res.json({ ok: true })
   })
   app.use(`${p}/players`, createPlayerRouter())
+  app.use(`${p}/notifications`, createNotificationRouter())
   app.use(`${p}/sync`, createSyncRouter())
 }
 

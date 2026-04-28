@@ -8,7 +8,12 @@ import { PreferenceFiltersPanel } from "@/components/discovery/PreferenceFilters
 import { newId, type UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
 import { profileSummaryLine } from "@/lib/discovery-query"
 import { clearDiscoverySnapshot } from "@/lib/discovery-session"
-import { deleteProfile, loadProfiles, type PlayerSearchProfile, upsertProfile } from "@/lib/player-profiles"
+import {
+  deleteProfileOnServer,
+  loadProfilesFromServer,
+  type PlayerSearchProfile,
+  upsertProfileOnServer,
+} from "@/lib/player-profiles"
 
 const DEFAULT_RANKING_PREFERENCES: RankingPreferences = {
   weights: {
@@ -30,7 +35,7 @@ export default function PreferencesPage() {
   const [rankingPreferences, setRankingPreferences] = useState<RankingPreferences>(DEFAULT_RANKING_PREFERENCES)
 
   useEffect(() => {
-    setProfiles(loadProfiles())
+    void loadProfilesFromServer().then(setProfiles)
   }, [])
 
   useEffect(() => {
@@ -64,9 +69,10 @@ export default function PreferencesPage() {
       onlyWithStats,
       rankingPreferences,
     }
-    upsertProfile(profile)
-    setProfiles(loadProfiles())
-    setEditor(null)
+    void upsertProfileOnServer(profile).then(async () => {
+      setProfiles(await loadProfilesFromServer())
+      setEditor(null)
+    })
   }
 
   const weightTotal =
@@ -78,8 +84,9 @@ export default function PreferencesPage() {
   const weightsValid = Math.abs(weightTotal - 1) < 0.00001
 
   function removeProfile(id: string) {
-    deleteProfile(id)
-    setProfiles(loadProfiles())
+    void deleteProfileOnServer(id).then(async () => {
+      setProfiles(await loadProfilesFromServer())
+    })
     if (editor?.id === id) setEditor(null)
   }
 

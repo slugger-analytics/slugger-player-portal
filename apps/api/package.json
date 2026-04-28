@@ -12,6 +12,7 @@
     "db:migrate:deploy": "node scripts/prisma-with-env.cjs migrate deploy",
     "sync": "tsx src/jobs/syncPipeline.ts",
     "sync:ts-node": "ts-node --transpile-only src/jobs/syncPipeline.ts",
+    "test": "node --test dist/**/*.test.js",
     "lint": "echo \"no linter configured\""
   },
   "dependencies": {

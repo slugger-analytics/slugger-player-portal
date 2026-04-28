@@ -10,6 +10,9 @@ import {
   type ReactNode,
 } from "react"
 import {
+  addWatchOnServer,
+  readUpdatesWatchIdsFromServer,
+  removeWatchOnServer,
   readUpdatesWatchIds,
   UPDATES_WATCH_STORAGE_KEY,
   writeUpdatesWatchIds,
@@ -29,7 +32,7 @@ export function UpdatesWatchProvider({ children }: { children: ReactNode }) {
   const [watchIds, setWatchIds] = useState<string[]>([])
 
   useEffect(() => {
-    setWatchIds(readUpdatesWatchIds())
+    void readUpdatesWatchIdsFromServer().then(setWatchIds)
   }, [])
 
   useEffect(() => {
@@ -52,16 +55,20 @@ export function UpdatesWatchProvider({ children }: { children: ReactNode }) {
   const addWatch = useCallback(
     (playerId: string) => {
       if (watchIds.includes(playerId)) return
-      persist([...watchIds, playerId])
+      void addWatchOnServer(playerId).then(() => {
+        persist(readUpdatesWatchIds())
+      })
     },
     [watchIds, persist],
   )
 
   const removeWatch = useCallback(
     (playerId: string) => {
-      persist(watchIds.filter((id) => id !== playerId))
+      void removeWatchOnServer(playerId).then(() => {
+        persist(readUpdatesWatchIds())
+      })
     },
-    [watchIds, persist],
+    [persist],
   )
 
   const toggleWatch = useCallback(

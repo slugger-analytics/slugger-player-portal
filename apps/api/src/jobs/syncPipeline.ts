@@ -59,14 +59,18 @@ function mergePlayers(lists: Player[][]): Player[] {
 
 /** Counts returned after a successful run (HTTP + CLI logging). */
 export type SyncPipelineResult = {
+  syncRunKey: string
   players: number
   transactions: number
   batting: number
   pitching: number
+  changedPlayerIds: string[]
 }
 
 /** Exported for tests, CLI, and `POST /sync`. */
 export async function runSyncPipeline(): Promise<SyncPipelineResult> {
+  const syncStartedAt = new Date()
+  const syncRunKey = syncStartedAt.toISOString()
   const sync = new ApiSyncTBC(config.tbcFeedPassword)
   const raw = new RawDataStorage()
   const parser = new DataParser()
@@ -105,12 +109,15 @@ export async function runSyncPipeline(): Promise<SyncPipelineResult> {
   await batting.upsertStats(filteredBat)
   await pitching.upsertStats(filteredPit)
   await txs.enforcePortalTransactionRetentionPolicy()
+  const changedPlayerIds = await txs.getPlayerIdsWithNewTransactionsSince(syncStartedAt)
 
   const result: SyncPipelineResult = {
+    syncRunKey,
     players: playerList.length,
     transactions: filteredTx.length,
     batting: filteredBat.length,
     pitching: filteredPit.length,
+    changedPlayerIds,
   }
 
   // eslint-disable-next-line no-console

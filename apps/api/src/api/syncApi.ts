@@ -8,9 +8,11 @@
 
 import { Router } from "express"
 import { runSyncPipeline } from "../jobs/syncPipeline"
+import { NotificationMatchingService } from "../services/NotificationMatchingService"
 
 export function createSyncRouter(): Router {
   const r = Router()
+  const notifications = new NotificationMatchingService()
 
   r.post("/", async (req, res, next) => {
     try {
@@ -24,7 +26,19 @@ export function createSyncRouter(): Router {
       }
 
       const counts = await runSyncPipeline()
-      res.json({ ok: true, ...counts })
+      await notifications.evaluateAfterSync({
+        syncRunKey: counts.syncRunKey,
+        changedPlayerIds: counts.changedPlayerIds,
+      })
+      res.json({
+        ok: true,
+        syncRunKey: counts.syncRunKey,
+        players: counts.players,
+        transactions: counts.transactions,
+        batting: counts.batting,
+        pitching: counts.pitching,
+        changedPlayers: counts.changedPlayerIds.length,
+      })
     } catch (e) {
       next(e)
     }

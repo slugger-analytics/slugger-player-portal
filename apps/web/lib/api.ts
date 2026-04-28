@@ -11,11 +11,13 @@
  */
 
 import type {
+  RankingPreferences,
   PlayerProfile,
   PlayerSummariesResponse,
   PlayerSummary,
   Transaction,
 } from "@available-player-portal/shared"
+import type { UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
 
 function normalizeApiBaseUrl(v: string | undefined): string {
   const raw = (v ?? "").trim()
@@ -68,6 +70,23 @@ async function errorDetailFromResponse(res: Response): Promise<string> {
   }
   const t = text.trim()
   return t.length > 200 ? `${t.slice(0, 200)}…` : t
+}
+
+function notificationIdentityHeaders(): Record<string, string> {
+  if (typeof window === "undefined") return {}
+  const sub =
+    window.localStorage.getItem("slugger-cognito-sub") ??
+    process.env.NEXT_PUBLIC_NOTIFICATION_DEV_COGNITO_SUB ??
+    ""
+  const email =
+    window.localStorage.getItem("slugger-email") ??
+    process.env.NEXT_PUBLIC_NOTIFICATION_DEV_EMAIL ??
+    ""
+  if (!sub || !email) return {}
+  return {
+    "x-slugger-cognito-sub": sub,
+    "x-slugger-email": email,
+  }
 }
 
 /** `GET /players` — filters + optional `limit` / `offset`; returns `{ players, total }`. */
@@ -150,4 +169,116 @@ export async function fetchPlayerTransactions(id: string): Promise<Transaction[]
   } catch (e) {
     rethrowNetworkError(e, "GET /players/:id/transactions")
   }
+}
+
+export type NotificationProfile = {
+  id: string
+  name: string
+  createdAt: string
+  filters: UiFilter[]
+  onlyWithStats: boolean
+  rankingPreferences?: RankingPreferences
+}
+
+export type NotificationEventItem = {
+  id: string
+  type: "PROFILE" | "WATCHED"
+  createdAt: string
+  readAt: string | null
+  player: PlayerSummary
+  savedProfile?: { id: string; name: string } | null
+}
+
+export async function fetchNotificationProfiles(): Promise<NotificationProfile[]> {
+  const base = getApiBaseUrl()
+  const res = await fetch(`${base}/notifications/profiles`, {
+    cache: "no-store",
+    headers: { ...notificationIdentityHeaders() },
+  })
+  if (!res.ok) throw new Error(`Failed to load notification profiles: ${res.status}`)
+  const data = (await res.json()) as { profiles?: NotificationProfile[] }
+  return data.profiles ?? []
+}
+
+export async function saveNotificationProfile(profile: NotificationProfile): Promise<NotificationProfile> {
+  const base = getApiBaseUrl()
+  const res = await fetch(`${base}/notifications/profiles`, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "content-type": "application/json",
+      ...notificationIdentityHeaders(),
+    },
+    body: JSON.stringify(profile),
+  })
+  if (!res.ok) throw new Error(`Failed to save profile: ${res.status}`)
+  const data = (await res.json()) as { profile: NotificationProfile }
+  return data.profile
+}
+
+export async function deleteNotificationProfile(id: string): Promise<void> {
+  const base = getApiBaseUrl()
+  const res = await fetch(`${base}/notifications/profiles/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    cache: "no-store",
+    headers: { ...notificationIdentityHeaders() },
+  })
+  if (!res.ok) throw new Error(`Failed to delete profile: ${res.status}`)
+}
+
+export async function fetchWatchedPlayerIds(): Promise<string[]> {
+  const base = getApiBaseUrl()
+  const res = await fetch(`${base}/notifications/watch`, {
+    cache: "no-store",
+    headers: { ...notificationIdentityHeaders() },
+  })
+  if (!res.ok) throw new Error(`Failed to load watched players: ${res.status}`)
+  const data = (await res.json()) as { playerIds?: string[] }
+  return data.playerIds ?? []
+}
+
+export async function addWatchedPlayer(playerId: string): Promise<void> {
+  const base = getApiBaseUrl()
+  const res = await fetch(`${base}/notifications/watch/${encodeURIComponent(playerId)}`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { ...notificationIdentityHeaders() },
+  })
+  if (!res.ok) throw new Error(`Failed to watch player: ${res.status}`)
+}
+
+export async function removeWatchedPlayer(playerId: string): Promise<void> {
+  const base = getApiBaseUrl()
+  const res = await fetch(`${base}/notifications/watch/${encodeURIComponent(playerId)}`, {
+    method: "DELETE",
+    cache: "no-store",
+    headers: { ...notificationIdentityHeaders() },
+  })
+  if (!res.ok) throw new Error(`Failed to unwatch player: ${res.status}`)
+}
+
+export async function fetchNotificationEvents(): Promise<NotificationEventItem[]> {
+  const base = getApiBaseUrl()
+  const res = await fetch(`${base}/notifications/events`, {
+    cache: "no-store",
+    headers: { ...notificationIdentityHeaders() },
+  })
+  if (!res.ok) throw new Error(`Failed to load notifications: ${res.status}`)
+  const data = (await res.json()) as { events?: NotificationEventItem[] }
+  return data.events ?? []
+}
+
+export async function markNotificationEventsRead(eventIds: string[]): Promise<void> {
+  if (eventIds.length === 0) return
+  const base = getApiBaseUrl()
+  const res = await fetch(`${base}/notifications/events/read`, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "content-type": "application/json",
+      ...notificationIdentityHeaders(),
+    },
+    body: JSON.stringify({ eventIds }),
+  })
+  if (!res.ok) throw new Error(`Failed to acknowledge notifications: ${res.status}`)
 }
