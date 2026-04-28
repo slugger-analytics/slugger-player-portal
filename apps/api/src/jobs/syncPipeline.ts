@@ -71,7 +71,9 @@ export type SyncPipelineResult = {
 export async function runSyncPipeline(): Promise<SyncPipelineResult> {
   const syncStartedAt = new Date()
   const syncRunKey = syncStartedAt.toISOString()
-  const sync = new ApiSyncTBC(config.tbcFeedPassword)
+  const sync = new ApiSyncTBC(config.tbcFeedPassword, {
+    proxyUrl: config.tbcHttpsProxyUrl || undefined,
+  })
   const raw = new RawDataStorage()
   const parser = new DataParser()
   const players = new PlayerRepository()

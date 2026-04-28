@@ -17,4 +17,10 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL ?? "",
   /** Server-only; never use NEXT_PUBLIC_ for this value. */
   tbcFeedPassword: process.env.TBC_FEED_PASSWORD ?? "jhu$",
+  /**
+   * Optional HTTP(S) proxy for BaseballCube feed fetches.
+   * Use this when the feed blocks AWS/NAT egress IPs in production.
+   * Example: http://user:pass@proxyhost:port
+   */
+  tbcHttpsProxyUrl: process.env.TBC_HTTPS_PROXY?.trim() ?? "",
 }
