@@ -76,14 +76,51 @@ function isLocalDevHost(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
 }
 
+function decodeBase64Url(input: string): string | null {
+  try {
+    const normalized = input.replace(/-/g, "+").replace(/_/g, "/")
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4 || 4)) % 4)
+    return atob(padded)
+  } catch {
+    return null
+  }
+}
+
+function readIdentityFromSluggerAuthTokens(): { sub: string; email: string } | null {
+  if (typeof window === "undefined") return null
+  const raw = window.localStorage.getItem("slugger_auth_tokens")
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as { idToken?: unknown }
+    const idToken = typeof parsed.idToken === "string" ? parsed.idToken : ""
+    const parts = idToken.split(".")
+    if (parts.length < 2) return null
+    const payloadRaw = decodeBase64Url(parts[1])
+    if (!payloadRaw) return null
+    const payload = JSON.parse(payloadRaw) as { sub?: unknown; email?: unknown }
+    const sub = typeof payload.sub === "string" ? payload.sub.trim() : ""
+    const email = typeof payload.email === "string" ? payload.email.trim() : ""
+    if (!sub || !email) return null
+    return { sub, email }
+  } catch {
+    return null
+  }
+}
+
 function notificationIdentityHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {}
 
-  // In production/staging, avoid cross-account leakage via stale localStorage overrides.
-  // Identity headers should come from real Cognito-aware host integration.
-  if (!isLocalDevHost(window.location.hostname)) {
-    return {}
+  // Prefer real signed-in Slugger identity from auth tokens across all environments.
+  const tokenIdentity = readIdentityFromSluggerAuthTokens()
+  if (tokenIdentity) {
+    return {
+      "x-slugger-cognito-sub": tokenIdentity.sub,
+      "x-slugger-email": tokenIdentity.email,
+    }
   }
+
+  // In production/staging, avoid cross-account leakage via stale manual localStorage overrides.
+  if (!isLocalDevHost(window.location.hostname)) return {}
 
   const sub =
     window.localStorage.getItem("slugger-cognito-sub") ??
