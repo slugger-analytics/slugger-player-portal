@@ -32,11 +32,18 @@ async function runLocalDirectSync(): Promise<void> {
   const forceSub = process.env.SYNC_FORCE_NOTIFY_USER_SUB?.trim() || ""
   const forcePlayerIds = parseCsvIds(process.env.SYNC_FORCE_NOTIFY_PLAYER_IDS)
   if (forceSub && forcePlayerIds.length > 0) {
-    const user = await prisma.notificationUser.findUnique({
-      where: { cognitoSub: forceSub },
-      select: { id: true, email: true },
+    const targetUsers = await prisma.notificationUser.findMany({
+      where: {
+        ...(forceSub ? { cognitoSub: forceSub } : {}),
+        watchedPlayers: { some: { playerId: { in: forcePlayerIds } } },
+      },
+      select: {
+        id: true,
+        email: true,
+        watchedPlayers: { select: { playerId: true } },
+      },
     })
-    if (user) {
+    for (const user of targetUsers) {
       const existing = await prisma.notificationDispatch.findUnique({
         where: {
           notificationUserId_syncRunKey: {
@@ -46,61 +53,62 @@ async function runLocalDirectSync(): Promise<void> {
         },
         select: { id: true },
       })
-      if (!existing) {
-        const createdEventIds: string[] = []
-        for (const playerId of forcePlayerIds) {
-          const event = await prisma.notificationEvent.upsert({
-            where: { dedupeKey: `${counts.syncRunKey}:${user.id}:${playerId}:WATCHED:LOCAL_DIRECT_FORCE` },
-            create: {
-              notificationUserId: user.id,
-              playerId,
-              type: "WATCHED",
-              dedupeKey: `${counts.syncRunKey}:${user.id}:${playerId}:WATCHED:LOCAL_DIRECT_FORCE`,
-              payload: { reason: "local-direct-sync-force-demo" },
-            },
-            update: {},
-            select: { id: true },
-          })
-          createdEventIds.push(event.id)
-        }
-        if (createdEventIds.length > 0) {
-          const dispatch = await prisma.notificationDispatch.create({
-            data: {
-              notificationUserId: user.id,
-              syncRunKey: counts.syncRunKey,
-              status: "pending",
-            },
-          })
-          await prisma.notificationDispatchItem.createMany({
-            data: createdEventIds.map((eventId) => ({ dispatchId: dispatch.id, eventId })),
-            skipDuplicates: true,
-          })
-          try {
-            const rows = await prisma.notificationEvent.findMany({
-              where: { id: { in: createdEventIds } },
-              include: { player: true },
-              orderBy: [{ createdAt: "desc" }],
-            })
-            const email = new NotificationEmailService()
-            await email.sendMatchSummary({
-              to: user.email,
-              syncRunKey: counts.syncRunKey,
-              lines: rows.map((r) => `${r.player.name} had an update from your watched list`),
-            })
-            await prisma.notificationDispatch.update({
-              where: { id: dispatch.id },
-              data: { status: "sent", errorMessage: null },
-            })
-          } catch (error) {
-            await prisma.notificationDispatch.update({
-              where: { id: dispatch.id },
-              data: {
-                status: "failed",
-                errorMessage: error instanceof Error ? error.message : "Unknown email failure",
-              },
-            })
-          }
-        }
+      if (existing) continue
+      const watchedIds = new Set(user.watchedPlayers.map((w) => w.playerId))
+      const matchedForcedIds = forcePlayerIds.filter((playerId) => watchedIds.has(playerId))
+      if (matchedForcedIds.length === 0) continue
+      const createdEventIds: string[] = []
+      for (const playerId of matchedForcedIds) {
+        const event = await prisma.notificationEvent.upsert({
+          where: { dedupeKey: `${counts.syncRunKey}:${user.id}:${playerId}:WATCHED:LOCAL_DIRECT_FORCE` },
+          create: {
+            notificationUserId: user.id,
+            playerId,
+            type: "WATCHED",
+            dedupeKey: `${counts.syncRunKey}:${user.id}:${playerId}:WATCHED:LOCAL_DIRECT_FORCE`,
+            payload: { reason: "local-direct-sync-force-demo" },
+          },
+          update: {},
+          select: { id: true },
+        })
+        createdEventIds.push(event.id)
+      }
+      if (createdEventIds.length === 0) continue
+      const dispatch = await prisma.notificationDispatch.create({
+        data: {
+          notificationUserId: user.id,
+          syncRunKey: counts.syncRunKey,
+          status: "pending",
+        },
+      })
+      await prisma.notificationDispatchItem.createMany({
+        data: createdEventIds.map((eventId) => ({ dispatchId: dispatch.id, eventId })),
+        skipDuplicates: true,
+      })
+      try {
+        const rows = await prisma.notificationEvent.findMany({
+          where: { id: { in: createdEventIds } },
+          include: { player: true },
+          orderBy: [{ createdAt: "desc" }],
+        })
+        const email = new NotificationEmailService()
+        await email.sendMatchSummary({
+          to: user.email,
+          syncRunKey: counts.syncRunKey,
+          lines: rows.map((r) => `${r.player.name} had an update from your watched list`),
+        })
+        await prisma.notificationDispatch.update({
+          where: { id: dispatch.id },
+          data: { status: "sent", errorMessage: null },
+        })
+      } catch (error) {
+        await prisma.notificationDispatch.update({
+          where: { id: dispatch.id },
+          data: {
+            status: "failed",
+            errorMessage: error instanceof Error ? error.message : "Unknown email failure",
+          },
+        })
       }
     }
   }
