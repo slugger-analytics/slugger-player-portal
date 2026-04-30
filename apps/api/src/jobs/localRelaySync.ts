@@ -13,6 +13,7 @@
 
 import { config } from "../config"
 import { ApiSyncTBC } from "../services/ApiSyncTBC"
+import { gzipSync } from "node:zlib"
 
 async function runLocalRelaySync(): Promise<void> {
   const remoteUrl =
@@ -30,17 +31,21 @@ async function runLocalRelaySync(): Promise<void> {
     sync.fetchPitchingStats(),
   ])
 
+  const payload = JSON.stringify({
+    transactionsRaw,
+    battingRaw,
+    pitchingRaw,
+  })
+  const compressed = gzipSync(Buffer.from(payload, "utf8"))
+
   const response = await fetch(remoteUrl, {
     method: "POST",
     headers: {
       "content-type": "application/json",
+      "content-encoding": "gzip",
       authorization: `Bearer ${syncKey}`,
     },
-    body: JSON.stringify({
-      transactionsRaw,
-      battingRaw,
-      pitchingRaw,
-    }),
+    body: compressed,
   })
   const bodyText = await response.text()
   if (!response.ok) {

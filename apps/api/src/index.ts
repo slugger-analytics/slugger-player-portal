@@ -32,7 +32,13 @@ const app = express()
 // In local dev the variable is unset, so 'true' is used (allow all origins — same as before).
 const corsOrigin: string | boolean = process.env.CORS_ALLOWED_ORIGIN || true
 app.use(cors({ origin: corsOrigin }))
-app.use(express.json())
+app.use(
+  express.json({
+    // Temporary raw-ingest fallback can send large feed payloads.
+    // Keep this high enough for compressed+inflated BaseballCube snapshots.
+    limit: "50mb",
+  }),
+)
 
 /** e.g. `/widgets/player-portal/api` when `BASE_PATH=/widgets/player-portal` */
 function apiPathPrefixFromEnv(): string {
