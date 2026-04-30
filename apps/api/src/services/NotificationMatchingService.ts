@@ -10,6 +10,14 @@ type MatchInput = {
 
 type ProfileFilters = Record<string, string | number | boolean | undefined>
 
+function parseCsvIds(value: string | undefined): string[] {
+  if (!value) return []
+  return value
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean)
+}
+
 export function filtersJsonToQuery(
   filters: unknown,
   onlyWithStats: boolean,
@@ -60,6 +68,8 @@ export class NotificationMatchingService {
     })
     for (const user of users) {
       const createdEventIds: string[] = []
+      const forceNotifySub = process.env.SYNC_FORCE_NOTIFY_USER_SUB?.trim() || ""
+      const forceNotifyPlayerIds = parseCsvIds(process.env.SYNC_FORCE_NOTIFY_PLAYER_IDS)
 
       for (const profile of user.savedProfiles) {
         const filters = filtersJsonToQuery(profile.filters, profile.onlyWithStats, profile.rankingPreferences)
@@ -89,7 +99,13 @@ export class NotificationMatchingService {
       }
 
       const watchedMatches = user.watchedPlayers.filter((row) => changedSet.has(row.playerId))
-      for (const watched of watchedMatches) {
+      const forcedWatchedMatches =
+        forceNotifySub && forceNotifySub === user.cognitoSub
+          ? forceNotifyPlayerIds
+              .filter((playerId) => changedSet.has(playerId))
+              .map((playerId) => ({ playerId }))
+          : []
+      for (const watched of [...watchedMatches, ...forcedWatchedMatches]) {
         const dedupeKey = `${input.syncRunKey}:${user.id}:${watched.playerId}:WATCHED`
         const created = await prisma.notificationEvent.upsert({
           where: { dedupeKey },
