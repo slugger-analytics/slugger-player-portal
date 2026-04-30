@@ -2,6 +2,7 @@ import { Router } from "express"
 import { NotificationRepository } from "../repositories/NotificationRepository"
 import { requireNotificationIdentity } from "../middleware/notificationAuth"
 import { NotificationEmailService } from "../services/NotificationEmailService"
+import { prisma } from "../lib/prisma"
 
 const repo = new NotificationRepository()
 const emailService = new NotificationEmailService()
@@ -62,7 +63,61 @@ export function createNotificationRouter(): Router {
   r.post("/watch/:playerId", async (req, res, next) => {
     try {
       const userId = req.notificationIdentity!.userId
-      await repo.addWatchedPlayer(userId, req.params.playerId)
+      const identity = req.notificationIdentity!
+      const playerId = req.params.playerId
+      await repo.addWatchedPlayer(userId, playerId)
+
+      // Demo-safe, UI-only deterministic path: when enabled, clicking bell creates
+      // an immediate watched notification + dispatch + email without waiting for sync.
+      const immediateNotifyOnWatch = process.env.DEMO_IMMEDIATE_NOTIFY_ON_WATCH === "true"
+      if (immediateNotifyOnWatch) {
+        const syncRunKey = `watch-trigger-${new Date().toISOString()}`
+        const dedupeKey = `${syncRunKey}:${userId}:${playerId}:WATCHED:IMMEDIATE`
+        const event = await prisma.notificationEvent.upsert({
+          where: { dedupeKey },
+          create: {
+            notificationUserId: userId,
+            playerId,
+            type: "WATCHED",
+            dedupeKey,
+            payload: { reason: "immediate-watch-trigger" },
+          },
+          update: {},
+          include: { player: true },
+        })
+        const dispatch = await prisma.notificationDispatch.upsert({
+          where: { notificationUserId_syncRunKey: { notificationUserId: userId, syncRunKey } },
+          create: {
+            notificationUserId: userId,
+            syncRunKey,
+            status: "pending",
+          },
+          update: {},
+        })
+        await prisma.notificationDispatchItem.createMany({
+          data: [{ dispatchId: dispatch.id, eventId: event.id }],
+          skipDuplicates: true,
+        })
+        try {
+          await emailService.sendMatchSummary({
+            to: identity.email,
+            syncRunKey,
+            lines: [`${event.player.name} had an update from your watched list`],
+          })
+          await prisma.notificationDispatch.update({
+            where: { id: dispatch.id },
+            data: { status: "sent", errorMessage: null },
+          })
+        } catch (error) {
+          await prisma.notificationDispatch.update({
+            where: { id: dispatch.id },
+            data: {
+              status: "failed",
+              errorMessage: error instanceof Error ? error.message : "Unknown email failure",
+            },
+          })
+        }
+      }
       res.json({ ok: true })
     } catch (error) {
       next(error)
