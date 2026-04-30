@@ -71,6 +71,23 @@ export function createNotificationRouter(): Router {
       // an immediate watched notification + dispatch + email without waiting for sync.
       const immediateNotifyOnWatch = process.env.DEMO_IMMEDIATE_NOTIFY_ON_WATCH === "true"
       if (immediateNotifyOnWatch) {
+        const immediateCooldownHours = 24
+        const cooldownStart = new Date(Date.now() - immediateCooldownHours * 60 * 60 * 1000)
+        const existingImmediate = await prisma.notificationEvent.findFirst({
+          where: {
+            notificationUserId: userId,
+            playerId,
+            type: "WATCHED",
+            createdAt: { gte: cooldownStart },
+            payload: { path: ["reason"], equals: "immediate-watch-trigger" },
+          },
+          select: { id: true },
+        })
+        if (existingImmediate) {
+          res.json({ ok: true, immediateSkipped: "cooldown" })
+          return
+        }
+
         const syncRunKey = `watch-trigger-${new Date().toISOString()}`
         const dedupeKey = `${syncRunKey}:${userId}:${playerId}:WATCHED:IMMEDIATE`
         const event = await prisma.notificationEvent.upsert({
