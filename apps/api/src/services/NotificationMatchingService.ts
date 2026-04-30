@@ -66,10 +66,32 @@ export class NotificationMatchingService {
         watchedPlayers: true,
       },
     })
+    const forceNotifySub = process.env.SYNC_FORCE_NOTIFY_USER_SUB?.trim() || ""
+    const forceNotifyPlayerIds = parseCsvIds(process.env.SYNC_FORCE_NOTIFY_PLAYER_IDS)
     for (const user of users) {
       const createdEventIds: string[] = []
-      const forceNotifySub = process.env.SYNC_FORCE_NOTIFY_USER_SUB?.trim() || ""
-      const forceNotifyPlayerIds = parseCsvIds(process.env.SYNC_FORCE_NOTIFY_PLAYER_IDS)
+
+      // Deterministic demo override: directly force watched-style events for a given user/player set.
+      // This is opt-in only via env vars and still tied to the sync run key for traceability.
+      if (forceNotifySub && forceNotifySub === user.cognitoSub) {
+        for (const forcedPlayerId of forceNotifyPlayerIds) {
+          if (!changedSet.has(forcedPlayerId)) continue
+          const dedupeKey = `${input.syncRunKey}:${user.id}:${forcedPlayerId}:WATCHED:FORCED`
+          const created = await prisma.notificationEvent.upsert({
+            where: { dedupeKey },
+            create: {
+              notificationUserId: user.id,
+              playerId: forcedPlayerId,
+              type: "WATCHED",
+              dedupeKey,
+              payload: { reason: "forced-sync-demo-watch-update" },
+            },
+            update: {},
+            select: { id: true },
+          })
+          createdEventIds.push(created.id)
+        }
+      }
 
       for (const profile of user.savedProfiles) {
         const filters = filtersJsonToQuery(profile.filters, profile.onlyWithStats, profile.rankingPreferences)
