@@ -111,7 +111,8 @@ async function processRawFeeds(rawFeeds: SyncPipelineRawFeeds): Promise<SyncPipe
   await batting.upsertStats(filteredBat)
   await pitching.upsertStats(filteredPit)
   await txs.enforcePortalTransactionRetentionPolicy()
-  const changedPlayerIds = await txs.getPlayerIdsWithNewTransactionsSince(syncStartedAt)
+  const changedFromTransactions = await txs.getPlayerIdsWithNewTransactionsSince(syncStartedAt)
+  const changedPlayerIds = [...new Set([...changedFromTransactions, ...config.syncForceChangedPlayerIds])]
 
   const result: SyncPipelineResult = {
     syncRunKey,
@@ -124,7 +125,7 @@ async function processRawFeeds(rawFeeds: SyncPipelineRawFeeds): Promise<SyncPipe
 
   // eslint-disable-next-line no-console
   console.log(
-    `[syncPipeline] done: players=${result.players} transactions=${result.transactions} batting=${result.batting} pitching=${result.pitching}`,
+    `[syncPipeline] done: players=${result.players} transactions=${result.transactions} batting=${result.batting} pitching=${result.pitching} changed=${result.changedPlayerIds.length}`,
   )
 
   return result
