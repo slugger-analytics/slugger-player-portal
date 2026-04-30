@@ -35,12 +35,10 @@ async function runLocalDirectSync(): Promise<void> {
     const targetUsers = await prisma.notificationUser.findMany({
       where: {
         ...(forceSub ? { cognitoSub: forceSub } : {}),
-        watchedPlayers: { some: { playerId: { in: forcePlayerIds } } },
       },
       select: {
         id: true,
         email: true,
-        watchedPlayers: { select: { playerId: true } },
       },
     })
     for (const user of targetUsers) {
@@ -54,8 +52,7 @@ async function runLocalDirectSync(): Promise<void> {
         select: { id: true },
       })
       if (existing) continue
-      const watchedIds = new Set(user.watchedPlayers.map((w) => w.playerId))
-      const matchedForcedIds = forcePlayerIds.filter((playerId) => watchedIds.has(playerId))
+      const matchedForcedIds = [...forcePlayerIds]
       if (matchedForcedIds.length === 0) continue
       const createdEventIds: string[] = []
       for (const playerId of matchedForcedIds) {
