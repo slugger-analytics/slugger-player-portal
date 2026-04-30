@@ -67,13 +67,15 @@ export type SyncPipelineResult = {
   changedPlayerIds: string[]
 }
 
-/** Exported for tests, CLI, and `POST /sync`. */
-export async function runSyncPipeline(): Promise<SyncPipelineResult> {
+export type SyncPipelineRawFeeds = {
+  transactionsRaw: string
+  battingRaw: string
+  pitchingRaw: string
+}
+
+async function processRawFeeds(rawFeeds: SyncPipelineRawFeeds): Promise<SyncPipelineResult> {
   const syncStartedAt = new Date()
   const syncRunKey = syncStartedAt.toISOString()
-  const sync = new ApiSyncTBC(config.tbcFeedPassword, {
-    proxyUrl: config.tbcHttpsProxyUrl || undefined,
-  })
   const raw = new RawDataStorage()
   const parser = new DataParser()
   const players = new PlayerRepository()
@@ -81,11 +83,9 @@ export async function runSyncPipeline(): Promise<SyncPipelineResult> {
   const batting = new BattingStatsRepository()
   const pitching = new PitchingStatsRepository()
 
-  const [tranxRaw, batRaw, pitRaw] = await Promise.all([
-    sync.fetchTransactions(),
-    sync.fetchBattingStats(),
-    sync.fetchPitchingStats(),
-  ])
+  const tranxRaw = rawFeeds.transactionsRaw
+  const batRaw = rawFeeds.battingRaw
+  const pitRaw = rawFeeds.pitchingRaw
 
   await raw.storeTransactions(tranxRaw)
   await raw.storeBatting(batRaw)
@@ -128,6 +128,27 @@ export async function runSyncPipeline(): Promise<SyncPipelineResult> {
   )
 
   return result
+}
+
+/** Exported for tests, CLI, and `POST /sync`. */
+export async function runSyncPipeline(): Promise<SyncPipelineResult> {
+  const sync = new ApiSyncTBC(config.tbcFeedPassword, {
+    proxyUrl: config.tbcHttpsProxyUrl || undefined,
+  })
+  const [transactionsRaw, battingRaw, pitchingRaw] = await Promise.all([
+    sync.fetchTransactions(),
+    sync.fetchBattingStats(),
+    sync.fetchPitchingStats(),
+  ])
+  return processRawFeeds({ transactionsRaw, battingRaw, pitchingRaw })
+}
+
+/**
+ * Temporary fallback path: run the same production sync processing on raw feed
+ * payloads fetched externally (e.g., from a non-blocked local machine).
+ */
+export async function runSyncPipelineFromRaw(rawFeeds: SyncPipelineRawFeeds): Promise<SyncPipelineResult> {
+  return processRawFeeds(rawFeeds)
 }
 
 /** True when this file is the CLI entry (`tsx …/syncPipeline.ts` or `node …/syncPipeline.js`). */
