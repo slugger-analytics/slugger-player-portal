@@ -1,4 +1,25 @@
-# Available Player Portal
+# SLUGGER: Available Player Portal
+
+## Description
+
+The SLUGGER Available Player Portal is a web application designed to help professional baseball teams identify and evaluate available players more efficiently. The platform centralizes player information, transaction data, rankings, and notifications into one system to simplify the recruiting workflow.
+
+This project was developed as part of the Johns Hopkins Sports Analytics Research Group (SARG) in collaboration with the Atlantic League and the SLUGGER platform.
+
+---
+
+## Features
+
+- Centralized player discovery dashboard
+- Real-time player availability tracking
+- Weighted player ranking system
+- Custom filtering and search functionality
+- Saved search profiles
+- Personal email notifications
+- AWS deployment integration
+- Responsive frontend interface
+
+---
 
 ## Overview
 
