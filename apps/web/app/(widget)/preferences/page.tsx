@@ -3,23 +3,20 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, Pencil, Plus, Trash2 } from "lucide-react"
-import type { RankingPreferences } from "@available-player-portal/shared"
 import { PreferenceFiltersPanel } from "@/components/discovery/PreferenceFiltersPanel"
-import { newId, type UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
+import { POSITION_FILTER_OPTIONS, newId, type UiFilter } from "@/components/discovery/DiscoveryFilterTypes"
 import { profileSummaryLine } from "@/lib/discovery-query"
 import { clearDiscoverySnapshot } from "@/lib/discovery-session"
+import {
+  EMPTY_RANKING_DRAFT,
+  isPitcherRankingTarget,
+  isRankingDraftEmpty,
+  rankingDraftToPreferences,
+  rankingDraftWeightValidation,
+  rankingPreferencesToDraft,
+  type RankingDraft,
+} from "@/lib/rankingPreferencesForm"
 import { deleteProfile, loadProfiles, type PlayerSearchProfile, upsertProfile } from "@/lib/player-profiles"
-
-const DEFAULT_RANKING_PREFERENCES: RankingPreferences = {
-  weights: {
-    performance: 0.3,
-    experience: 0.2,
-    positionMatch: 0.15,
-    availability: 0.15,
-    recentTransactions: 0.2,
-  },
-  targetPosition: "",
-}
 
 export default function PreferencesPage() {
   const [profiles, setProfiles] = useState<PlayerSearchProfile[]>([])
@@ -27,7 +24,7 @@ export default function PreferencesPage() {
   const [name, setName] = useState("")
   const [filters, setFilters] = useState<UiFilter[]>([])
   const [onlyWithStats, setOnlyWithStats] = useState(false)
-  const [rankingPreferences, setRankingPreferences] = useState<RankingPreferences>(DEFAULT_RANKING_PREFERENCES)
+  const [rankingDraft, setRankingDraft] = useState<RankingDraft>(EMPTY_RANKING_DRAFT)
 
   useEffect(() => {
     setProfiles(loadProfiles())
@@ -42,7 +39,7 @@ export default function PreferencesPage() {
     setName("")
     setFilters([])
     setOnlyWithStats(false)
-    setRankingPreferences(DEFAULT_RANKING_PREFERENCES)
+    setRankingDraft({ ...EMPTY_RANKING_DRAFT })
   }
 
   function openEdit(p: PlayerSearchProfile) {
@@ -50,10 +47,13 @@ export default function PreferencesPage() {
     setName(p.name)
     setFilters(p.filters)
     setOnlyWithStats(p.onlyWithStats)
-    setRankingPreferences(p.rankingPreferences ?? DEFAULT_RANKING_PREFERENCES)
+    setRankingDraft(rankingPreferencesToDraft(p.rankingPreferences))
   }
 
   function saveProfile() {
+    const parsed = rankingDraftToPreferences(rankingDraft)
+    const empty = isRankingDraftEmpty(rankingDraft)
+    if (!parsed && !empty) return
     const id = editor?.id ?? newId()
     const existing = profiles.find((x) => x.id === id)
     const profile: PlayerSearchProfile = {
@@ -62,20 +62,19 @@ export default function PreferencesPage() {
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       filters,
       onlyWithStats,
-      rankingPreferences,
+      ...(parsed ? { rankingPreferences: parsed } : {}),
     }
     upsertProfile(profile)
     setProfiles(loadProfiles())
     setEditor(null)
   }
 
-  const weightTotal =
-    rankingPreferences.weights.performance +
-    rankingPreferences.weights.experience +
-    rankingPreferences.weights.positionMatch +
-    rankingPreferences.weights.availability +
-    rankingPreferences.weights.recentTransactions
-  const weightsValid = Math.abs(weightTotal - 1) < 0.00001
+  const {
+    pitcherTarget: rankingPitcherTarget,
+    total: rankingWeightTotal,
+    weightsValid,
+    targetSelected: targetPositionSelected,
+  } = rankingDraftWeightValidation(rankingDraft)
 
   function removeProfile(id: string) {
     deleteProfile(id)
@@ -147,109 +146,158 @@ export default function PreferencesPage() {
                 Ranking preferences
               </p>
               <div className="portal-panel-well grid grid-cols-1 gap-4 sm:grid-cols-2 sm:p-5">
-              <label className="portal-field">
-              Performance weight (%)
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={Math.round(rankingPreferences.weights.performance * 100)}
-                onChange={(e) =>
-                  setRankingPreferences((prev) => ({
-                    ...prev,
-                    weights: { ...prev.weights, performance: Number(e.target.value || 0) / 100 },
-                  }))
-                }
-                className="portal-control"
-              />
-              </label>
-              <label className="portal-field">
-              Experience weight (%)
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={Math.round(rankingPreferences.weights.experience * 100)}
-                onChange={(e) =>
-                  setRankingPreferences((prev) => ({
-                    ...prev,
-                    weights: { ...prev.weights, experience: Number(e.target.value || 0) / 100 },
-                  }))
-                }
-                className="portal-control"
-              />
-              </label>
-              <label className="portal-field">
-              Position match weight (%)
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={Math.round(rankingPreferences.weights.positionMatch * 100)}
-                onChange={(e) =>
-                  setRankingPreferences((prev) => ({
-                    ...prev,
-                    weights: { ...prev.weights, positionMatch: Number(e.target.value || 0) / 100 },
-                  }))
-                }
-                className="portal-control"
-              />
-              </label>
-              <label className="portal-field">
-              Availability weight (%)
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={Math.round(rankingPreferences.weights.availability * 100)}
-                onChange={(e) =>
-                  setRankingPreferences((prev) => ({
-                    ...prev,
-                    weights: { ...prev.weights, availability: Number(e.target.value || 0) / 100 },
-                  }))
-                }
-                className="portal-control"
-              />
-              </label>
-              <label className="portal-field">
-              Recent transactions weight (%)
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={Math.round(rankingPreferences.weights.recentTransactions * 100)}
-                onChange={(e) =>
-                  setRankingPreferences((prev) => ({
-                    ...prev,
-                    weights: { ...prev.weights, recentTransactions: Number(e.target.value || 0) / 100 },
-                  }))
-                }
-                className="portal-control"
-              />
-              </label>
-              <label className="portal-field">
-              Target position (exact match bonus)
-              <input
-                value={rankingPreferences.targetPosition ?? ""}
-                onChange={(e) =>
-                  setRankingPreferences((prev) => ({
-                    ...prev,
-                    targetPosition: e.target.value,
-                  }))
-                }
-                placeholder="e.g. Pitcher"
-                className="portal-control"
-              />
-              </label>
-            </div>
+                <label className="portal-field">
+                  Performance (%)
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={rankingDraft.performance}
+                    onChange={(e) =>
+                      setRankingDraft((prev) => ({
+                        ...prev,
+                        performance: e.target.value,
+                      }))
+                    }
+                    placeholder="eg 30"
+                    className="portal-control"
+                  />
+                </label>
+                <label className="portal-field">
+                  Experience (%)
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={rankingDraft.experience}
+                    onChange={(e) =>
+                      setRankingDraft((prev) => ({
+                        ...prev,
+                        experience: e.target.value,
+                      }))
+                    }
+                    placeholder="eg 20"
+                    className="portal-control"
+                  />
+                </label>
+                <div
+                  className={
+                    rankingPitcherTarget ? "opacity-50 [&_input]:cursor-not-allowed" : undefined
+                  }
+                >
+                  <label className="portal-field">
+                    Position match (%)
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={rankingPitcherTarget ? "" : rankingDraft.positionMatch}
+                      readOnly={rankingPitcherTarget}
+                      disabled={rankingPitcherTarget}
+                      onChange={(e) =>
+                        setRankingDraft((prev) => ({
+                          ...prev,
+                          positionMatch: e.target.value,
+                        }))
+                      }
+                      placeholder="eg 15"
+                      className="portal-control"
+                    />
+                  </label>
+                </div>
+                <label className="portal-field">
+                  Availability (%)
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={rankingDraft.availability}
+                    onChange={(e) =>
+                      setRankingDraft((prev) => ({
+                        ...prev,
+                        availability: e.target.value,
+                      }))
+                    }
+                    placeholder="eg 15"
+                    className="portal-control"
+                  />
+                </label>
+                <label className="portal-field">
+                  Recent transactions (%)
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={rankingDraft.recentTransactions}
+                    onChange={(e) =>
+                      setRankingDraft((prev) => ({
+                        ...prev,
+                        recentTransactions: e.target.value,
+                      }))
+                    }
+                    placeholder="eg 20"
+                    className="portal-control"
+                  />
+                </label>
+                <label className="portal-field">
+                  Target position
+                  <select
+                    value={rankingDraft.targetPosition}
+                    onChange={(e) =>
+                      setRankingDraft((prev) => {
+                        const targetPosition = e.target.value
+                        return {
+                          ...prev,
+                          targetPosition,
+                          positionMatch: isPitcherRankingTarget(targetPosition) ? "" : prev.positionMatch,
+                        }
+                      })
+                    }
+                    className="portal-control"
+                  >
+                    <option value="">Select position</option>
+                    {(() => {
+                      const raw = rankingDraft.targetPosition.trim()
+                      const known = (POSITION_FILTER_OPTIONS as readonly string[]).includes(raw)
+                      if (raw && !known) {
+                        return (
+                          <option key="__saved__" value={raw}>
+                            {raw} (saved)
+                          </option>
+                        )
+                      }
+                      return null
+                    })()}
+                    {POSITION_FILTER_OPTIONS.map((pos) => (
+                      <option key={pos} value={pos}>
+                        {pos}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {rankingPitcherTarget ? (
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                  Pitcher target (<span className="font-mono">P</span>): position match is not used (counts as 0%).
+                  Allocate its share across the other four weights so the total stays 100%.
+                </p>
+              ) : null}
               <p
-                className={`text-xs ${weightsValid ? "text-neutral-500 dark:text-neutral-400" : "text-red-600 dark:text-red-400"}`}
+                className={`text-xs ${weightsValid && targetPositionSelected ? "text-neutral-500 dark:text-neutral-400" : "text-red-600 dark:text-red-400"}`}
               >
-                Weight total: {(weightTotal * 100).toFixed(0)}% (must equal 100%)
+                Total: {Number.isFinite(rankingWeightTotal) ? rankingWeightTotal.toFixed(0) : "—"}% (must equal 100%)
+                {!targetPositionSelected ? " · Select a target position." : null}
               </p>
             </div>
             <div className="flex flex-wrap gap-2 pt-1">
-              <button type="button" className="portal-btn-primary" onClick={saveProfile} disabled={!weightsValid}>
+              <button
+                type="button"
+                className="portal-btn-primary"
+                onClick={saveProfile}
+                disabled={
+                  (!weightsValid || !targetPositionSelected) && !isRankingDraftEmpty(rankingDraft)
+                }
+              >
                 Save profile
               </button>
               <button

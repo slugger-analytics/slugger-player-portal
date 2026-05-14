@@ -36,10 +36,15 @@ function applyDiscoverySort(
   } else if (sort === "transactionType") {
     q.sortBy = "recentProfileTransaction"
     q.sortDir = "desc"
-    q.transactionTypes = transactionTypes.join(",")
   } else if (sort === "ranking") {
     q.sortBy = "rankScore"
     q.sortDir = "desc"
+  }
+  // Always send selected transaction types (not only for "transactionType" sort). The API uses
+  // them for last-X-days windows, recency ordering, and card "most recent" tx — otherwise the
+  // server assumes all three families and ignores the sidebar checkboxes on default sort.
+  if (transactionTypes.length > 0) {
+    q.transactionTypes = transactionTypes.join(",")
   }
   return q
 }

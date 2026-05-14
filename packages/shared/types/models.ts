@@ -117,8 +117,10 @@ export interface PlayerFilters {
    */
   sortDir?: "asc" | "desc"
   /**
-   * Rolling window from now: only players with at least one transaction whose `date` falls in
-   * `[now − N days, now]`. List order is by most recent transaction first (then name).
+   * Rolling window from now: only players with at least one **matching** transaction whose `date`
+   * falls in `[now − N days, now]`. Matching uses the same families as discovery transaction types
+   * ({@link TransactionTypeFilter} / defaults: retired, released, free agent) — not every feed line.
+   * List order is by most recent **matching** transaction first (then name).
    * Allowed values: {@link LAST_TRANSACTION_DAYS_OPTIONS}.
    */
   lastTransactionDays?: number

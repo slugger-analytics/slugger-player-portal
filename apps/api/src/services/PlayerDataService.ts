@@ -24,7 +24,7 @@ import type {
   PitchingStats,
   Transaction,
 } from "../types/models"
-import { computeRankScores, type RankingPreferences } from "@available-player-portal/shared"
+import { computeRankScores, type RankingPreferences, type TransactionTypeFilter } from "@available-player-portal/shared"
 import { BattingStatsRepository } from "../repositories/BattingStatsRepository"
 import { PitchingStatsRepository } from "../repositories/PitchingStatsRepository"
 import { PlayerRepository } from "../repositories/PlayerRepository"
@@ -65,7 +65,7 @@ export class PlayerDataService {
       this.players.countPlayers(filters),
       this.players.getPlayers(filters),
     ])
-    const players = await this.buildPlayerSummariesBatch(list)
+    const players = await this.buildPlayerSummariesBatch(list, filters.transactionTypes)
     return { players, total }
   }
 
@@ -124,7 +124,7 @@ export class PlayerDataService {
     const [battingById, pitchingById, txById] = await Promise.all([
       this.batting.getStatsByPlayerIds(ids),
       this.pitching.getStatsByPlayerIds(ids),
-      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids),
+      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids, filters.transactionTypes),
     ])
     const rankingInput = list.map((p) => {
       const batting = battingById.get(p.id) ?? []
@@ -199,9 +199,9 @@ export class PlayerDataService {
     const [battingById, pitchingById, txById] = await Promise.all([
       this.batting.getStatsByPlayerIds(ids),
       this.pitching.getStatsByPlayerIds(ids),
-      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids),
+      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids, filters.transactionTypes),
     ])
-    const summaries = await this.buildPlayerSummariesBatch(list)
+    const summaries = await this.buildPlayerSummariesBatch(list, filters.transactionTypes)
     const rankingInput = list.map((p) => {
       const batting = battingById.get(p.id) ?? []
       const pitching = pitchingById.get(p.id) ?? []
@@ -304,7 +304,7 @@ export class PlayerDataService {
             filters,
           )
         : undefined
-    const players = await this.buildPlayerSummariesBatch(list)
+    const players = await this.buildPlayerSummariesBatch(list, filters.transactionTypes)
     if (rankingMeta) {
       for (const s of players) {
         const meta = rankingMeta.get(s.id)
@@ -342,13 +342,16 @@ export class PlayerDataService {
     )
   }
 
-  private async buildPlayerSummariesBatch(list: Player[]): Promise<PlayerSummary[]> {
+  private async buildPlayerSummariesBatch(
+    list: Player[],
+    transactionTypes?: TransactionTypeFilter[],
+  ): Promise<PlayerSummary[]> {
     if (list.length === 0) return []
     const ids = list.map((p) => p.id)
     const [battingById, pitchingById, recentTxById] = await Promise.all([
       this.batting.getStatsByPlayerIds(ids),
       this.pitching.getStatsByPlayerIds(ids),
-      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids),
+      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids, transactionTypes),
     ])
     return list.map((p) => {
       const tx = recentTxById.get(p.id)
