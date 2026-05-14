@@ -3,14 +3,19 @@
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { PlayerCard } from "@/components/discovery/PlayerCard"
-import { fetchPlayerSummaryForCard } from "@/lib/api"
+import {
+  fetchNotificationEvents,
+  fetchPlayerSummaryForCard,
+  markNotificationEventsRead,
+  type NotificationEventItem,
+} from "@/lib/api"
 import { clearDiscoverySnapshot } from "@/lib/discovery-session"
 import {
   PROFILE_UPDATE_DISPLAY_LIMIT,
   loadPendingMatchesForProfile,
 } from "@/lib/loadProfileUpdateMatches"
 import { acknowledgePlayerSnapshots, readProfileAcks, writeProfileAcks } from "@/lib/profileUpdatesAck"
-import { loadProfiles, type PlayerSearchProfile } from "@/lib/player-profiles"
+import { loadProfilesFromServer, type PlayerSearchProfile } from "@/lib/player-profiles"
 import { useUpdatesWatch } from "@/components/updates/UpdatesWatchProvider"
 import type { PlayerSummary } from "@available-player-portal/shared"
 
@@ -21,7 +26,6 @@ function parseTransactionMs(d: string | null | undefined): number | null {
   return Number.isNaN(t) ? null : t
 }
 
-/** Order profile sections by newest pending activity. */
 function maxPreviewTransactionMs(players: PlayerSummary[]): number {
   let max = -Infinity
   for (const pl of players) {
@@ -35,25 +39,30 @@ type ProfileSectionState = {
   loading: boolean
   error: string | null
   players: PlayerSummary[]
-  /** Row count matching the profile (from API); used for empty copy. */
   matchTotal: number | null
 }
 
 export default function UpdatesPage() {
   const { watchIds } = useUpdatesWatch()
+  const [profiles, setProfiles] = useState<PlayerSearchProfile[]>([])
+  const [byProfile, setByProfile] = useState<Record<string, ProfileSectionState>>({})
+  const [watchedSummaries, setWatchedSummaries] = useState<PlayerSummary[]>([])
+  const [events, setEvents] = useState<NotificationEventItem[]>([])
+  const [watchedLoading, setWatchedLoading] = useState(true)
+  const [watchedError, setWatchedError] = useState<string | null>(null)
 
   useEffect(() => {
     clearDiscoverySnapshot()
   }, [])
 
-  const [profiles, setProfiles] = useState<PlayerSearchProfile[]>([])
-  const [byProfile, setByProfile] = useState<Record<string, ProfileSectionState>>({})
-  const [watchedSummaries, setWatchedSummaries] = useState<PlayerSummary[]>([])
-  const [watchedLoading, setWatchedLoading] = useState(true)
-  const [watchedError, setWatchedError] = useState<string | null>(null)
-
   const refreshProfiles = useCallback(() => {
-    setProfiles(loadProfiles())
+    void loadProfilesFromServer().then(setProfiles)
+  }, [])
+
+  const refreshEvents = useCallback(() => {
+    void fetchNotificationEvents()
+      .then(setEvents)
+      .catch(() => setEvents([]))
   }, [])
 
   const profilesOrdered = useMemo(() => {
@@ -67,12 +76,16 @@ export default function UpdatesPage() {
 
   useEffect(() => {
     refreshProfiles()
+    refreshEvents()
     const onVis = () => {
-      if (document.visibilityState === "visible") refreshProfiles()
+      if (document.visibilityState === "visible") {
+        refreshProfiles()
+        refreshEvents()
+      }
     }
     document.addEventListener("visibilitychange", onVis)
     return () => document.removeEventListener("visibilitychange", onVis)
-  }, [refreshProfiles])
+  }, [refreshProfiles, refreshEvents])
 
   useEffect(() => {
     if (profiles.length === 0) {
@@ -80,30 +93,21 @@ export default function UpdatesPage() {
       return
     }
     let cancelled = false
-
     const next: Record<string, ProfileSectionState> = {}
     for (const p of profiles) {
       next[p.id] = { loading: true, error: null, players: [], matchTotal: null }
     }
     setByProfile(next)
-
     void (async () => {
       for (const p of profiles) {
         try {
           const acksNow = readProfileAcks()
           const { players, acks, migratedAcksPersist, matchTotal } = await loadPendingMatchesForProfile(p, acksNow)
-          if (migratedAcksPersist) {
-            writeProfileAcks(acks)
-          }
+          if (migratedAcksPersist) writeProfileAcks(acks)
           if (!cancelled) {
             setByProfile((prev) => ({
               ...prev,
-              [p.id]: {
-                loading: false,
-                error: null,
-                players,
-                matchTotal,
-              },
+              [p.id]: { loading: false, error: null, players, matchTotal },
             }))
           }
         } catch (e) {
@@ -121,7 +125,6 @@ export default function UpdatesPage() {
         }
       }
     })()
-
     return () => {
       cancelled = true
     }
@@ -177,17 +180,14 @@ export default function UpdatesPage() {
       const p = profiles.find((x) => x.id === profileId)
       if (!p) return
       try {
-        const { players: nextPlayers, acks, migratedAcksPersist, matchTotal } =
-          await loadPendingMatchesForProfile(p, readProfileAcks())
+        const { players: nextPlayers, acks, migratedAcksPersist, matchTotal } = await loadPendingMatchesForProfile(
+          p,
+          readProfileAcks(),
+        )
         if (migratedAcksPersist) writeProfileAcks(acks)
         setByProfile((prev) => ({
           ...prev,
-          [profileId]: {
-            loading: false,
-            error: null,
-            players: nextPlayers,
-            matchTotal,
-          },
+          [profileId]: { loading: false, error: null, players: nextPlayers, matchTotal },
         }))
       } catch (e) {
         setByProfile((prev) => ({
@@ -201,54 +201,40 @@ export default function UpdatesPage() {
         }))
       }
     })()
+    const profileEventIds = events
+      .filter((e) => e.type === "PROFILE" && e.savedProfile?.id === profileId && !e.readAt)
+      .map((e) => e.id)
+    void markNotificationEventsRead(profileEventIds).then(refreshEvents)
   }
 
   const linkClass = "portal-link text-sm"
+  const latestEventByPlayerId = useMemo(() => {
+    const out = new Map<string, NotificationEventItem>()
+    for (const event of events) {
+      if (!out.has(event.player.id)) out.set(event.player.id, event)
+    }
+    return out
+  }, [events])
 
   return (
     <main className="portal-page">
       <h1 className="sr-only">Updates</h1>
-
       <section>
         <div className="portal-filter-shell flex flex-col gap-4 sm:p-5">
           <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-              From your saved profiles
-            </h2>
+            <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">From your saved profiles</h2>
             <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
               Lists are built from the search criteria you save in{" "}
-              <Link href="/preferences" className={linkClass}>Preferences</Link>.
+              <Link href="/preferences" className={linkClass}>
+                Preferences
+              </Link>
+              .
             </p>
-            <ul className="list-inside list-disc space-y-1.5 pl-0.5 text-sm leading-relaxed text-neutral-600 dark:text-neutral-400 sm:list-outside sm:pl-5">
-              <li>
-                You only see players with <strong className="font-medium text-neutral-800 dark:text-neutral-200">new or
-                unread</strong> updates.
-              </li>
-              <li>
-                We show at most <strong className="font-medium text-neutral-800 dark:text-neutral-200">
-                  {PROFILE_UPDATE_DISPLAY_LIMIT} players
-                </strong>{" "}
-                per profile at once.
-              </li>
-              <li>
-                <strong className="font-medium text-neutral-800 dark:text-neutral-200">Mark as read</strong> clears
-                the current list so the next batch can load.
-              </li>
-              <li>
-                If a player&apos;s transactions change again later, they can reappear here.
-              </li>
-            </ul>
           </div>
-
           <div className="portal-panel-well sm:p-5">
             {profilesOrdered.length === 0 ? (
               <div className="portal-empty-well text-left text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
                 <p className="font-medium text-neutral-800 dark:text-neutral-200">No saved profiles yet</p>
-                <p className="mt-2">
-                  Add a search profile in{" "}
-                  <Link href="/preferences" className={linkClass}>Preferences</Link>{" "}
-                  to see new matches for that criteria in this section.
-                </p>
               </div>
             ) : (
               <div className="flex flex-col gap-5">
@@ -256,12 +242,11 @@ export default function UpdatesPage() {
                   const state = byProfile[p.id]
                   const players = state?.players ?? []
                   const matchTotal = state?.matchTotal
+                  const latestProfileEvent = events.find(
+                    (event) => event.type === "PROFILE" && event.savedProfile?.id === p.id,
+                  )
                   const caughtUp =
-                    !state?.loading &&
-                    !state?.error &&
-                    players.length === 0 &&
-                    matchTotal != null &&
-                    matchTotal > 0
+                    !state?.loading && !state?.error && players.length === 0 && matchTotal != null && matchTotal > 0
                   return (
                     <div key={p.id} className="portal-surface flex flex-col gap-4 p-5">
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -270,6 +255,11 @@ export default function UpdatesPage() {
                           <p className="text-xs text-neutral-500 dark:text-neutral-500">
                             Updates (up to {PROFILE_UPDATE_DISPLAY_LIMIT} at a time)
                           </p>
+                          {latestProfileEvent ? (
+                            <p className="text-xs text-neutral-500 dark:text-neutral-500">
+                              Latest notification: {new Date(latestProfileEvent.createdAt).toLocaleString()}
+                            </p>
+                          ) : null}
                         </div>
                         {players.length > 0 ? (
                           <button
@@ -291,8 +281,11 @@ export default function UpdatesPage() {
                         </p>
                       ) : caughtUp ? (
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                          You&apos;re caught up — no new updates for this profile. Check back after more transaction
-                          activity, or review matches in <Link href="/dashboard" className={linkClass}>Discovery</Link>.
+                          You&apos;re caught up. Check{" "}
+                          <Link href="/dashboard" className={linkClass}>
+                            Discovery
+                          </Link>{" "}
+                          for more.
                         </p>
                       ) : players.length === 0 ? (
                         <p className="text-sm text-neutral-600 dark:text-neutral-400">No new updates right now.</p>
@@ -316,13 +309,7 @@ export default function UpdatesPage() {
         <div className="portal-filter-shell flex flex-col gap-4 sm:p-5">
           <div className="space-y-2">
             <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Players you follow</h2>
-            <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-              On any player card, tap the{" "}
-              <strong className="font-medium text-neutral-800 dark:text-neutral-200">bell</strong> next to the heart to
-              follow or unfollow. Players you follow appear here when there is something new to check.
-            </p>
           </div>
-
           <div className="portal-panel-well sm:p-5">
             {watchedLoading ? (
               <p className="text-sm text-neutral-500 dark:text-neutral-400">Loading…</p>
@@ -331,16 +318,18 @@ export default function UpdatesPage() {
             ) : watchIds.length === 0 ? (
               <div className="portal-empty-well text-left text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
                 <p className="font-medium text-neutral-800 dark:text-neutral-200">You aren’t following anyone yet</p>
-                <p className="mt-2">
-                  Open a player from <Link href="/dashboard" className={linkClass}>Discovery</Link> or{" "}
-                  <Link href="/favorites" className={linkClass}>Favorites</Link>, then tap the bell on their card to add
-                  them here.
-                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {watchedSummaries.map((pl) => (
-                  <PlayerCard key={pl.id} player={pl} className="!max-w-none" />
+                  <div key={pl.id}>
+                    <PlayerCard player={pl} className="!max-w-none" />
+                    {latestEventByPlayerId.get(pl.id) ? (
+                      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-500">
+                        Latest notification: {new Date(latestEventByPlayerId.get(pl.id)!.createdAt).toLocaleString()}
+                      </p>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             )}

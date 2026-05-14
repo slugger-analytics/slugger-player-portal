@@ -22,6 +22,7 @@
 import cors from "cors"
 import express from "express"
 import { createPlayerRouter } from "./api/PlayerAPI"
+import { createNotificationRouter } from "./api/notificationApi"
 import { createSyncRouter } from "./api/syncApi"
 import { config } from "./config"
 import { prisma } from "./lib/prisma"
@@ -31,7 +32,13 @@ const app = express()
 // In local dev the variable is unset, so 'true' is used (allow all origins — same as before).
 const corsOrigin: string | boolean = process.env.CORS_ALLOWED_ORIGIN || true
 app.use(cors({ origin: corsOrigin }))
-app.use(express.json())
+app.use(
+  express.json({
+    // Temporary raw-ingest fallback can send large feed payloads.
+    // Keep this high enough for compressed+inflated BaseballCube snapshots.
+    limit: "50mb",
+  }),
+)
 
 /** e.g. `/widgets/player-portal/api` when `BASE_PATH=/widgets/player-portal` */
 function apiPathPrefixFromEnv(): string {
@@ -44,13 +51,13 @@ function apiPathPrefixFromEnv(): string {
 const productionApiPrefix = apiPathPrefixFromEnv()
 /** When BASE_PATH is set, still mount the same routes at `/` for local clients that use a bare origin. */
 const alsoMountAtRoot = Boolean(productionApiPrefix)
-
 function mountApiRoutes(pathPrefix: string): void {
   const p = pathPrefix.replace(/\/$/, "")
   app.get(`${p}/health`, (_req, res) => {
     res.json({ ok: true })
   })
   app.use(`${p}/players`, createPlayerRouter())
+  app.use(`${p}/notifications`, createNotificationRouter())
   app.use(`${p}/sync`, createSyncRouter())
 }
 

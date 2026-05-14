@@ -15,6 +15,7 @@
  */
 
 import https from "https"
+import { HttpsProxyAgent } from "https-proxy-agent"
 
 const TBC_BASE = "https://thebaseballcube.com/data/feed/jhu"
 
@@ -25,8 +26,14 @@ function buildUrl(path: string, password: string): string {
 }
 
 /** HTTP/1.1 GET via Node.js https module, following up to 5 redirects. */
-function httpsGet(url: string, redirectsLeft = 5): Promise<string> {
+function httpsGet(
+  url: string,
+  opts: { proxyUrl?: string } = {},
+  redirectsLeft = 5,
+): Promise<string> {
   return new Promise((resolve, reject) => {
+    const proxyUrl = opts.proxyUrl?.trim()
+    const agent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined
     const req = https.get(
       url,
       {
@@ -34,6 +41,7 @@ function httpsGet(url: string, redirectsLeft = 5): Promise<string> {
           Accept: "text/plain,text/html,*/*",
           "User-Agent": "curl/8.7.1",
         },
+        ...(agent ? { agent } : {}),
         timeout: 180_000,
       },
       (res) => {
@@ -48,7 +56,7 @@ function httpsGet(url: string, redirectsLeft = 5): Promise<string> {
             return
           }
           res.resume()
-          httpsGet(res.headers.location, redirectsLeft - 1).then(resolve, reject)
+          httpsGet(res.headers.location, opts, redirectsLeft - 1).then(resolve, reject)
           return
         }
         if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
@@ -74,11 +82,14 @@ function httpsGet(url: string, redirectsLeft = 5): Promise<string> {
  * Thin client for TBC feed endpoints. Each `fetch*` method delegates to {@link GET}.
  */
 export class ApiSyncTBC {
-  constructor(private readonly password: string) {}
+  constructor(
+    private readonly password: string,
+    private readonly options: { proxyUrl?: string } = {},
+  ) {}
 
   /** Low-level GET returning response body as plain text (feeds are CSV-in-HTML). */
   async GET(url: string): Promise<string> {
-    return httpsGet(url)
+    return httpsGet(url, this.options)
   }
 
   /** Transaction rows feed (`tranx.asp`). */

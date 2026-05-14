@@ -212,4 +212,13 @@ export class TransactionRepository {
       `
     }
   }
+
+  async getPlayerIdsWithNewTransactionsSince(since: Date): Promise<string[]> {
+    const rows = await prisma.transaction.findMany({
+      where: { createdAt: { gte: since } },
+      select: { playerId: true },
+      distinct: ["playerId"],
+    })
+    return rows.map((row) => row.playerId)
+  }
 }
