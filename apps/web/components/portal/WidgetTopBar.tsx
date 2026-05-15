@@ -57,7 +57,7 @@ function PreferencesSegmentedLink() {
   return (
     <Link
       href="/preferences"
-      className={`flex min-w-0 flex-1 items-center justify-center gap-2 px-3 text-[15px] font-semibold transition sm:px-4 sm:text-base ${
+      className={`flex h-full min-w-0 flex-1 items-center justify-center gap-2 px-3 text-[15px] font-semibold transition sm:px-4 sm:text-base ${
         active
           ? "bg-portal-surface text-[#4A5F78] dark:bg-neutral-800/95 dark:text-portal-accent"
           : "text-neutral-600 hover:bg-white/75 dark:text-neutral-400 dark:hover:bg-neutral-800/50"
@@ -65,7 +65,7 @@ function PreferencesSegmentedLink() {
       aria-current={active ? "page" : undefined}
     >
       <Pencil className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" strokeWidth={1.75} aria-hidden />
-      <span className="min-w-0 truncate sm:whitespace-nowrap">Preferences</span>
+      <span className="whitespace-nowrap">Preferences</span>
     </Link>
   )
 }
