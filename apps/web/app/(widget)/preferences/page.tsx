@@ -16,7 +16,12 @@ import {
   rankingPreferencesToDraft,
   type RankingDraft,
 } from "@/lib/rankingPreferencesForm"
-import { deleteProfile, loadProfiles, type PlayerSearchProfile, upsertProfile } from "@/lib/player-profiles"
+import {
+  deleteProfileOnServer,
+  loadProfilesFromServer,
+  type PlayerSearchProfile,
+  upsertProfileOnServer,
+} from "@/lib/player-profiles"
 
 export default function PreferencesPage() {
   const [profiles, setProfiles] = useState<PlayerSearchProfile[]>([])
