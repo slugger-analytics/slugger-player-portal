@@ -1,8 +1,11 @@
 name: Sync TBC Data
 
 on:
-  schedule:
-    - cron: "*/30 * * * *"
+  # Cron schedule paused while TBC's Cloudflare Bot Fight Mode blocks
+  # GitHub-hosted runner IPs. Re-enable once Gary allow-lists a stable
+  # identifier (see docs/DEPLOYMENT.md) or we route through a proxy.
+  # schedule:
+  #   - cron: "*/30 * * * *"
   workflow_dispatch:
 
 permissions:
