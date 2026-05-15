@@ -19,8 +19,8 @@ import {
 import {
   deleteProfileOnServer,
   loadProfilesFromServer,
-  type PlayerSearchProfile,
   upsertProfileOnServer,
+  type PlayerSearchProfile,
 } from "@/lib/player-profiles"
 
 export default function PreferencesPage() {

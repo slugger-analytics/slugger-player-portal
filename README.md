@@ -179,6 +179,7 @@ Copy **`.env.example`** to **`.env`** at the repo root (or set env per app in yo
 | `DATABASE_URL` | API | PostgreSQL connection string for Prisma. |
 | `PORT` | API | HTTP port (default `4000`). |
 | `TBC_FEED_PASSWORD` | API | TBC feed password; **server-only**, never exposed to the browser. |
+| `TBC_HTTPS_PROXY` | API / Sync relay | Optional static/allowlisted egress for Baseball Cube fetches. |
 | `NEXT_PUBLIC_API_URL` | Web | Base URL of the Express API (e.g. `http://localhost:4000`). |
 | `NEXT_PUBLIC_BASE_PATH` | Web | Optional URL prefix when the app is not at domain root (must match `basePath` in `next.config.ts`). |
 | `NEXTAUTH_*` | Web | Standalone NextAuth when not using SLUGGER-only flow. |
@@ -195,8 +196,9 @@ The **Player Discovery** dataset is populated by the API job, not by the Next.js
 
 - **Command:** `npm run sync -w @available-player-portal/api` (uses `tsx`) or `npm run sync:ts-node -w @available-player-portal/api`.
 - **Entry:** `apps/api/src/jobs/syncPipeline.ts` — fetches three TBC feeds, appends rows to `raw_feed_snapshots`, parses and upserts players and stats. Re-running is **idempotent** for players and stats (unique keys); transactions use a content hash to avoid duplicates.
+- **AWS-safe relay:** `npm run sync:relay -w @available-player-portal/api` fetches TBC from the runner or `TBC_HTTPS_PROXY`, then posts raw feeds to `POST /sync/ingest-raw`. Production DB writes and notification emails still happen inside the API, but AWS Lambda no longer needs direct TBC egress.
 
-Schedule the same command on a server (e.g. cron) with `DATABASE_URL` and `TBC_FEED_PASSWORD` set. Example cron ideas are in `.env.example` under `CRON_*`.
+Schedule `sync:relay` when TBC blocks AWS egress. Configure `TBC_FEED_PASSWORD`, `SYNC_INTERNAL_KEY`, and optionally `REMOTE_SYNC_INGEST_URL` / `TBC_HTTPS_PROXY`.
 
 ---
 
@@ -217,7 +219,8 @@ Schedule the same command on a server (e.g. cron) with `DATABASE_URL` and `TBC_F
 | `GET` | `/players` | Query: filters + optional `limit`/`offset` — returns `{ players, total }`. See `docs/API_SPEC.md`. |
 | `GET` | `/players/:id` | Full `PlayerProfile` (player, recent/previous batting & pitching, transactions). |
 | `GET` | `/players/:id/transactions` | `Transaction[]` only (chronological). |
-| `POST` | `/sync` | Runs the full TBC → PostgreSQL pipeline (same as `npm run sync`). Optional: set `SYNC_INTERNAL_KEY` and send `Authorization: Bearer <key>`. |
+| `POST` | `/sync` | Runs the full TBC → PostgreSQL pipeline. Optional: set `SYNC_INTERNAL_KEY` and send `Authorization: Bearer <key>`. |
+| `POST` | `/sync/ingest-raw` | Processes externally fetched TBC raw feeds, then evaluates notification matches and sends emails. Requires the same sync authorization. |
 
 The **Player Discovery Home** page includes **Refresh database**, which calls the Next.js route **`POST /api/sync`** (server-side only). That proxies to **`POST /sync`** on the API with the shared secret when configured.
 

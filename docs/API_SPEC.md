@@ -133,6 +133,35 @@ Counts reflect **parsed row volumes** for that run (upserts may update existing 
 
 **Browser access:** The web app should not call this URL directly with secrets. Use **`POST /api/sync`** on the Next.js app, which proxies server-side (see `apps/web/app/api/sync/route.ts`).
 
+### `POST /sync/ingest-raw`
+
+Processes raw TBC feed payloads fetched by a trusted relay. This runs the same parse, upsert, notification matching, and email dispatch logic as `/sync`, but avoids direct TBC egress from AWS Lambda.
+
+**Authentication:** same `Authorization: Bearer <SYNC_INTERNAL_KEY>` behavior as `/sync`.
+
+**Request bodies (one of):**
+
+```json
+{
+  "s3Bucket": "alpb-player-portal-sync",
+  "transactionsKey": "feeds/<run>/transactions.csv.gz",
+  "battingKey": "feeds/<run>/batting.csv.gz",
+  "pitchingKey": "feeds/<run>/pitching.csv.gz"
+}
+```
+
+```json
+{
+  "transactionsRaw": "...",
+  "battingRaw": "...",
+  "pitchingRaw": "..."
+}
+```
+
+Keys ending in `.gz` are gunzipped transparently. `s3Bucket` defaults to `FEED_S3_BUCKET` when omitted.
+
+**Response:** same counts as `/sync`, plus `"source": "s3-ingest"` or `"raw-ingest"`.
+
 ---
 
 ## Global errors

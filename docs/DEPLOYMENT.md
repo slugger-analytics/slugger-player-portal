@@ -33,6 +33,7 @@ Copy **`.env.example`** at the repo root and set values per environment. Minimum
 |----------|---------|----------|---------|
 | `DATABASE_URL` | API | Yes | Prisma connection string |
 | `TBC_FEED_PASSWORD` | API | Yes for sync | TBC feed query parameter (server-only) |
+| `TBC_HTTPS_PROXY` | API / Sync relay | No | Optional static/allowlisted egress for Baseball Cube fetches |
 | `NEXT_PUBLIC_API_URL` | Web | Yes (prod) | Public base URL of the API as seen by the browser |
 | `PORT` | API | No | Default `4000` |
 
@@ -42,6 +43,8 @@ Copy **`.env.example`** at the repo root and set values per environment. Minimum
 |----------|---------|---------|
 | `SYNC_INTERNAL_KEY` | API + Web (server) | Same secret on both; protects `POST /sync` and allows `POST /api/sync` to authorize |
 | `INTERNAL_API_URL` | Web (server) | If the API URL differs from `NEXT_PUBLIC_API_URL` inside your VPC (e.g. private hostname) |
+| `REMOTE_SYNC_INGEST_URL` | Sync relay | Override target for `npm run sync:relay`; defaults to production raw-ingest route |
+| `FEED_S3_BUCKET` | API + Sync relay | S3 bucket the relay stages gzipped feeds into and the Lambda reads them from |
 
 **Optional / future features** (see `.env.example`): `NEXTAUTH_*`, `SLUGGER_*`, `SMTP_*`, `VAPID_*`, `MLB_*`, `BASEBALL_CUBE_*`.
 
@@ -90,7 +93,13 @@ or, with API running and secrets configured:
 - `POST /sync` with `Authorization: Bearer …` if `SYNC_INTERNAL_KEY` is set, or  
 - **Refresh database** on the home page (calls Next `POST /api/sync`).
 
-Schedule the same pipeline on a cron job if you need fresh TBC data regularly.
+If TBC blocks AWS/Lambda egress, run the relay instead:
+
+```bash
+npm run sync:relay -w @available-player-portal/api
+```
+
+The relay fetches TBC from the runner or `TBC_HTTPS_PROXY`, then posts raw feeds to `POST /sync/ingest-raw`; the API still performs production DB writes and notification emails. The scheduled GitHub workflow uses this relay path so the sync Lambda does not need direct access to TBC.
 
 ---
 
@@ -132,6 +141,7 @@ Prisma 6’s CLI pulls `@prisma/config`, which previously depended on `effect` &
 | Empty player list | Run sync; verify `DATABASE_URL`; confirm filters are not overly strict. |
 | Web “cannot reach API” | `NEXT_PUBLIC_API_URL`, firewall, API process listening. |
 | Sync 401 | `SYNC_INTERNAL_KEY` must match on API and on the Next server for `/api/sync`. |
+| Sync 403 from TBC | Use `npm run sync:relay -w @available-player-portal/api`; set `TBC_HTTPS_PROXY` if the runner itself needs a whitelisted static IP. |
 | Prisma errors | `npx prisma generate` after schema changes; migration status. |
 
 ---

@@ -63,6 +63,7 @@ Re-running the pipeline is **idempotent** for those unique constraints: no dupli
 - CLI: `npm run sync` or `npm run sync:ts-node` in `apps/api`
 - HTTP: `POST /sync` on the API (see `docs/API_SPEC.md`)
 - UI: **Refresh database** on the home page → Next.js `POST /api/sync` → API `POST /sync`
+- Relay: `npm run sync:relay` fetches TBC from the runner or `TBC_HTTPS_PROXY`, then posts raw feeds to `POST /sync/ingest-raw` so AWS Lambda can process DB writes and notifications without direct TBC egress.
 
 ---
 

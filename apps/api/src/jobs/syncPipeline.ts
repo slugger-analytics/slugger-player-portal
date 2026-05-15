@@ -145,8 +145,8 @@ export async function runSyncPipeline(): Promise<SyncPipelineResult> {
 }
 
 /**
- * Temporary fallback path: run the same production sync processing on raw feed
- * payloads fetched externally (e.g., from a non-blocked local machine).
+ * Relay ingest path: run the same production sync processing on raw feed
+ * payloads fetched externally so AWS egress never needs to contact TBC.
  */
 export async function runSyncPipelineFromRaw(rawFeeds: SyncPipelineRawFeeds): Promise<SyncPipelineResult> {
   return processRawFeeds(rawFeeds)
