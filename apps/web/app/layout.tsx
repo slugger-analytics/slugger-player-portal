@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 }
 
 /** Runs before paint so the first frame matches saved or system theme (avoids flash). */
-const themeInitScript = `(function(){try{var k='portal-theme';var t=localStorage.getItem(k);var d=t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches);if(d)document.documentElement.classList.add('dark');}catch(e){}})();`
+const themeInitScript = `(function(){try{var k='portal-theme';var t=localStorage.getItem(k);var d=t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();`
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
