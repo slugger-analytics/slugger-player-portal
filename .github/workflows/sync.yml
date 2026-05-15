@@ -7,7 +7,7 @@ on:
 
 jobs:
   sync:
-    name: Fetch TBC feeds and sync to Aurora
+    name: Fetch TBC feeds and relay to production
     runs-on: ubuntu-latest
 
     steps:
@@ -25,9 +25,11 @@ jobs:
       - name: Build shared package
         run: npm run build -w @available-player-portal/shared
 
-      - name: Run sync pipeline
+      - name: Fetch feeds and relay to production ingest
         working-directory: apps/api
         env:
-          DATABASE_URL: ${{ secrets.PLAYER_PORTAL_DATABASE_URL }}
           TBC_FEED_PASSWORD: ${{ secrets.TBC_FEED_PASSWORD }}
-        run: npx tsx src/jobs/syncPipeline.ts
+          TBC_HTTPS_PROXY: ${{ secrets.TBC_HTTPS_PROXY }}
+          SYNC_INTERNAL_KEY: ${{ secrets.SYNC_INTERNAL_KEY }}
+          REMOTE_SYNC_INGEST_URL: https://www.alpb-analytics.com/widgets/player-portal/api/sync/ingest-raw
+        run: npx tsx src/jobs/localRelaySync.ts

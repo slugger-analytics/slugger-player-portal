@@ -14,7 +14,10 @@ export function createSyncRouter(): Router {
   const r = Router()
   const notifications = new NotificationMatchingService()
 
-  function ensureAuthorized(req: { headers: { authorization?: string } }, res: { status: (code: number) => { json: (body: unknown) => void } }): boolean {
+  function ensureAuthorized(
+    req: { headers: { authorization?: string } },
+    res: { status: (code: number) => { json: (body: unknown) => void } },
+  ): boolean {
     const required = process.env.SYNC_INTERNAL_KEY?.trim()
     if (!required) return true
     const auth = req.headers.authorization
@@ -47,9 +50,8 @@ export function createSyncRouter(): Router {
   })
 
   /**
-   * Temporary fallback endpoint: process externally-fetched raw feed payloads.
-   * This keeps DB writes + notifications in production while feed download can
-   * happen from a non-blocked network.
+   * Relay endpoint for externally fetched raw feed payloads. This keeps DB writes
+   * and notifications in production while avoiding TBC blocks on AWS egress.
    */
   r.post("/ingest-raw", async (req, res, next) => {
     try {

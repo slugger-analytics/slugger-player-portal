@@ -133,6 +133,24 @@ Counts reflect **parsed row volumes** for that run (upserts may update existing 
 
 **Browser access:** The web app should not call this URL directly with secrets. Use **`POST /api/sync`** on the Next.js app, which proxies server-side (see `apps/web/app/api/sync/route.ts`).
 
+### `POST /sync/ingest-raw`
+
+Processes raw TBC feed payloads fetched by a trusted relay. This runs the same parse, upsert, notification matching, and email dispatch logic as `/sync`, but avoids direct TBC egress from AWS Lambda.
+
+**Authentication:** same `Authorization: Bearer <SYNC_INTERNAL_KEY>` behavior as `/sync`.
+
+**Request body:**
+
+```json
+{
+  "transactionsRaw": "...",
+  "battingRaw": "...",
+  "pitchingRaw": "..."
+}
+```
+
+**Response:** same counts as `/sync`, plus `"source": "raw-ingest"`.
+
 ---
 
 ## Global errors

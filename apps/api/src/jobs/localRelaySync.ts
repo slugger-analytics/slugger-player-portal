@@ -1,7 +1,8 @@
 /**
- * Temporary workaround runner:
- * 1) Fetches BaseballCube feeds from this machine (non-blocked egress)
- * 2) Uploads raw payloads to production `/sync/ingest-raw`
+ * Relay sync runner:
+ * 1) Fetches BaseballCube feeds from the runner or configured proxy
+ * 2) Uploads raw payloads to production `/sync/ingest-raw`, where DB writes
+ *    and notification matching happen in the API environment.
  *
  * Required env:
  * - TBC_FEED_PASSWORD
@@ -9,6 +10,7 @@
  *
  * Optional env:
  * - REMOTE_SYNC_INGEST_URL (default production endpoint)
+ * - TBC_HTTPS_PROXY (static/whitelisted egress for TBC fetches)
  */
 
 import { config } from "../config"
@@ -24,7 +26,9 @@ async function runLocalRelaySync(): Promise<void> {
     throw new Error("Missing SYNC_INTERNAL_KEY")
   }
 
-  const sync = new ApiSyncTBC(config.tbcFeedPassword)
+  const sync = new ApiSyncTBC(config.tbcFeedPassword, {
+    proxyUrl: config.tbcHttpsProxyUrl || undefined,
+  })
   const [transactionsRaw, battingRaw, pitchingRaw] = await Promise.all([
     sync.fetchTransactions(),
     sync.fetchBattingStats(),
