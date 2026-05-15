@@ -55,6 +55,8 @@ model Player {
   transactions Transaction[]
   battingStats BattingStat[]
   pitchingStats PitchingStat[]
+  watchedPlayers WatchedPlayer[]
+  notificationEvents NotificationEvent[]
 
   @@index([discoveryEligible, name])
   @@index([experienceLevel])
@@ -117,4 +119,97 @@ model RawFeedSnapshot {
   feedType   String   @map("feed_type")
   rawContent String   @map("raw_content")
   fetchedAt  DateTime @default(now()) @map("fetched_at")
+}
+
+model NotificationUser {
+  id         String   @id @default(cuid())
+  cognitoSub String   @unique @map("cognito_sub")
+  email      String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  savedProfiles          SavedSearchProfile[]
+  watchedPlayers         WatchedPlayer[]
+  notificationEvents     NotificationEvent[]
+  notificationDispatches NotificationDispatch[]
+}
+
+model SavedSearchProfile {
+  id                 String   @id @default(cuid())
+  notificationUserId String   @map("notification_user_id")
+  name               String
+  filters            Json
+  onlyWithStats      Boolean  @default(false) @map("only_with_stats")
+  rankingPreferences Json?    @map("ranking_preferences")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  notificationUser NotificationUser @relation(fields: [notificationUserId], references: [id], onDelete: Cascade)
+  notificationEvents NotificationEvent[] @relation("SavedProfileEvents")
+
+  @@index([notificationUserId])
+}
+
+model WatchedPlayer {
+  id                 String   @id @default(cuid())
+  notificationUserId String   @map("notification_user_id")
+  playerId           String   @map("player_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  notificationUser NotificationUser @relation(fields: [notificationUserId], references: [id], onDelete: Cascade)
+  player           Player           @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationUserId, playerId])
+  @@index([notificationUserId])
+}
+
+enum NotificationEventType {
+  PROFILE
+  WATCHED
+}
+
+model NotificationEvent {
+  id                    String                @id @default(cuid())
+  notificationUserId    String                @map("notification_user_id")
+  playerId              String                @map("player_id")
+  type                  NotificationEventType
+  dedupeKey             String                @unique @map("dedupe_key")
+  savedSearchProfileId  String?               @map("saved_search_profile_id")
+  payload               Json?
+  createdAt             DateTime              @default(now()) @map("created_at")
+  readAt                DateTime?             @map("read_at")
+
+  notificationUser NotificationUser   @relation(fields: [notificationUserId], references: [id], onDelete: Cascade)
+  player           Player             @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  savedProfile     SavedSearchProfile? @relation("SavedProfileEvents", fields: [savedSearchProfileId], references: [id], onDelete: SetNull)
+
+  dispatchItems NotificationDispatchItem[]
+
+  @@index([notificationUserId, createdAt])
+  @@index([notificationUserId, readAt])
+}
+
+model NotificationDispatch {
+  id                 String   @id @default(cuid())
+  notificationUserId String   @map("notification_user_id")
+  syncRunKey         String   @map("sync_run_key")
+  dispatchedAt       DateTime @default(now()) @map("dispatched_at")
+  status             String
+  errorMessage       String?  @map("error_message")
+
+  notificationUser NotificationUser @relation(fields: [notificationUserId], references: [id], onDelete: Cascade)
+  items            NotificationDispatchItem[]
+
+  @@unique([notificationUserId, syncRunKey])
+  @@index([syncRunKey])
+}
+
+model NotificationDispatchItem {
+  dispatchId String @map("dispatch_id")
+  eventId    String @map("event_id")
+
+  dispatch NotificationDispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+  event    NotificationEvent    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([dispatchId, eventId])
 }

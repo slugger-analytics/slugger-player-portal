@@ -59,15 +59,23 @@ function mergePlayers(lists: Player[][]): Player[] {
 
 /** Counts returned after a successful run (HTTP + CLI logging). */
 export type SyncPipelineResult = {
+  syncRunKey: string
   players: number
   transactions: number
   batting: number
   pitching: number
+  changedPlayerIds: string[]
 }
 
-/** Exported for tests, CLI, and `POST /sync`. */
-export async function runSyncPipeline(): Promise<SyncPipelineResult> {
-  const sync = new ApiSyncTBC(config.tbcFeedPassword)
+export type SyncPipelineRawFeeds = {
+  transactionsRaw: string
+  battingRaw: string
+  pitchingRaw: string
+}
+
+async function processRawFeeds(rawFeeds: SyncPipelineRawFeeds): Promise<SyncPipelineResult> {
+  const syncStartedAt = new Date()
+  const syncRunKey = syncStartedAt.toISOString()
   const raw = new RawDataStorage()
   const parser = new DataParser()
   const players = new PlayerRepository()
@@ -75,11 +83,9 @@ export async function runSyncPipeline(): Promise<SyncPipelineResult> {
   const batting = new BattingStatsRepository()
   const pitching = new PitchingStatsRepository()
 
-  const [tranxRaw, batRaw, pitRaw] = await Promise.all([
-    sync.fetchTransactions(),
-    sync.fetchBattingStats(),
-    sync.fetchPitchingStats(),
-  ])
+  const tranxRaw = rawFeeds.transactionsRaw
+  const batRaw = rawFeeds.battingRaw
+  const pitRaw = rawFeeds.pitchingRaw
 
   await raw.storeTransactions(tranxRaw)
   await raw.storeBatting(batRaw)
@@ -105,20 +111,45 @@ export async function runSyncPipeline(): Promise<SyncPipelineResult> {
   await batting.upsertStats(filteredBat)
   await pitching.upsertStats(filteredPit)
   await txs.enforcePortalTransactionRetentionPolicy()
+  const changedFromTransactions = await txs.getPlayerIdsWithNewTransactionsSince(syncStartedAt)
+  const changedPlayerIds = [...new Set([...changedFromTransactions, ...config.syncForceChangedPlayerIds])]
 
   const result: SyncPipelineResult = {
+    syncRunKey,
     players: playerList.length,
     transactions: parsedTx.length,
     batting: filteredBat.length,
     pitching: filteredPit.length,
+    changedPlayerIds,
   }
 
   // eslint-disable-next-line no-console
   console.log(
-    `[syncPipeline] done: players=${result.players} transactions=${result.transactions} batting=${result.batting} pitching=${result.pitching}`,
+    `[syncPipeline] done: players=${result.players} transactions=${result.transactions} batting=${result.batting} pitching=${result.pitching} changed=${result.changedPlayerIds.length}`,
   )
 
   return result
+}
+
+/** Exported for tests, CLI, and `POST /sync`. */
+export async function runSyncPipeline(): Promise<SyncPipelineResult> {
+  const sync = new ApiSyncTBC(config.tbcFeedPassword, {
+    proxyUrl: config.tbcHttpsProxyUrl || undefined,
+  })
+  const [transactionsRaw, battingRaw, pitchingRaw] = await Promise.all([
+    sync.fetchTransactions(),
+    sync.fetchBattingStats(),
+    sync.fetchPitchingStats(),
+  ])
+  return processRawFeeds({ transactionsRaw, battingRaw, pitchingRaw })
+}
+
+/**
+ * Temporary fallback path: run the same production sync processing on raw feed
+ * payloads fetched externally (e.g., from a non-blocked local machine).
+ */
+export async function runSyncPipelineFromRaw(rawFeeds: SyncPipelineRawFeeds): Promise<SyncPipelineResult> {
+  return processRawFeeds(rawFeeds)
 }
 
 /** True when this file is the CLI entry (`tsx …/syncPipeline.ts` or `node …/syncPipeline.js`). */

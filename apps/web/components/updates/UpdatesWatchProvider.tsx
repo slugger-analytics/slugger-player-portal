@@ -10,6 +10,9 @@ import {
   type ReactNode,
 } from "react"
 import {
+  addWatchOnServer,
+  readUpdatesWatchIdsFromServer,
+  removeWatchOnServer,
   readUpdatesWatchIds,
   UPDATES_WATCH_STORAGE_KEY,
   writeUpdatesWatchIds,
@@ -29,7 +32,7 @@ export function UpdatesWatchProvider({ children }: { children: ReactNode }) {
   const [watchIds, setWatchIds] = useState<string[]>([])
 
   useEffect(() => {
-    setWatchIds(readUpdatesWatchIds())
+    void readUpdatesWatchIdsFromServer().then(setWatchIds)
   }, [])
 
   useEffect(() => {
@@ -52,14 +55,23 @@ export function UpdatesWatchProvider({ children }: { children: ReactNode }) {
   const addWatch = useCallback(
     (playerId: string) => {
       if (watchIds.includes(playerId)) return
-      persist([...watchIds, playerId])
+      const next = [...watchIds, playerId]
+      // Update immediately so bell toggles even if API call fails.
+      persist(next)
+      void addWatchOnServer(playerId).catch(() => {
+        /* keep local fallback */
+      })
     },
     [watchIds, persist],
   )
 
   const removeWatch = useCallback(
     (playerId: string) => {
-      persist(watchIds.filter((id) => id !== playerId))
+      const next = watchIds.filter((id) => id !== playerId)
+      persist(next)
+      void removeWatchOnServer(playerId).catch(() => {
+        /* keep local fallback */
+      })
     },
     [watchIds, persist],
   )

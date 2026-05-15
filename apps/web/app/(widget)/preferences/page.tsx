@@ -27,7 +27,7 @@ export default function PreferencesPage() {
   const [rankingDraft, setRankingDraft] = useState<RankingDraft>(EMPTY_RANKING_DRAFT)
 
   useEffect(() => {
-    setProfiles(loadProfiles())
+    void loadProfilesFromServer().then(setProfiles)
   }, [])
 
   useEffect(() => {
@@ -64,9 +64,10 @@ export default function PreferencesPage() {
       onlyWithStats,
       ...(parsed ? { rankingPreferences: parsed } : {}),
     }
-    upsertProfile(profile)
-    setProfiles(loadProfiles())
-    setEditor(null)
+    void upsertProfileOnServer(profile).then(async () => {
+      setProfiles(await loadProfilesFromServer())
+      setEditor(null)
+    })
   }
 
   const {
@@ -77,8 +78,9 @@ export default function PreferencesPage() {
   } = rankingDraftWeightValidation(rankingDraft)
 
   function removeProfile(id: string) {
-    deleteProfile(id)
-    setProfiles(loadProfiles())
+    void deleteProfileOnServer(id).then(async () => {
+      setProfiles(await loadProfilesFromServer())
+    })
     if (editor?.id === id) setEditor(null)
   }
 
