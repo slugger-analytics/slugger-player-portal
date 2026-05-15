@@ -24,6 +24,14 @@ import {
   takeDiscoverySnapshot,
 } from "@/lib/discovery-session"
 import { loadProfiles, type PlayerSearchProfile } from "@/lib/player-profiles"
+import {
+  EMPTY_RANKING_DRAFT,
+  isPitcherRankingTarget,
+  rankingDraftToPreferences,
+  rankingDraftWeightValidation,
+  rankingPreferencesToDraft,
+  type RankingDraft,
+} from "@/lib/rankingPreferencesForm"
 import type { PlayerSummary, RankingPreferences } from "@available-player-portal/shared"
 import { upsertProfile } from "@/lib/player-profiles"
 
@@ -42,59 +50,6 @@ function dedupePlayersById(players: PlayerSummary[]): PlayerSummary[] {
 }
 
 type SearchMode = "custom" | "profile"
-
-type RankingDraft = {
-  performance: string
-  experience: string
-  positionMatch: string
-  availability: string
-  recentTransactions: string
-  targetPosition: string
-}
-
-const EMPTY_RANKING_DRAFT: RankingDraft = {
-  performance: "",
-  experience: "",
-  positionMatch: "",
-  availability: "",
-  recentTransactions: "",
-  targetPosition: "",
-}
-
-function rankingPreferencesToDraft(prefs?: RankingPreferences): RankingDraft {
-  if (!prefs) return { ...EMPTY_RANKING_DRAFT }
-  return {
-    performance: String(Math.round(prefs.weights.performance * 100)),
-    experience: String(Math.round(prefs.weights.experience * 100)),
-    positionMatch: String(Math.round(prefs.weights.positionMatch * 100)),
-    availability: String(Math.round(prefs.weights.availability * 100)),
-    recentTransactions: String(Math.round(prefs.weights.recentTransactions * 100)),
-    targetPosition: prefs.targetPosition ?? "",
-  }
-}
-
-function rankingDraftToPreferences(draft: RankingDraft): RankingPreferences | null {
-  const perf = Number(draft.performance)
-  const exp = Number(draft.experience)
-  const pos = Number(draft.positionMatch)
-  const avail = Number(draft.availability)
-  const tx = Number(draft.recentTransactions)
-  const nums = [perf, exp, pos, avail, tx]
-  if (nums.some((n) => !Number.isFinite(n) || n < 0 || n > 100)) return null
-  const total = perf + exp + pos + avail + tx
-  if (Math.abs(total - 100) >= 0.00001) return null
-  if (!draft.targetPosition.trim()) return null
-  return {
-    weights: {
-      performance: perf / 100,
-      experience: exp / 100,
-      positionMatch: pos / 100,
-      availability: avail / 100,
-      recentTransactions: tx / 100,
-    },
-    targetPosition: draft.targetPosition.trim(),
-  }
-}
 
 export default function PlayerDiscoveryHomePage() {
   const [searchMode, setSearchMode] = useState<SearchMode>("custom")
@@ -316,17 +271,12 @@ export default function PlayerDiscoveryHomePage() {
     setRankingModalOpen(false)
   }
 
-  const rankingDraftNums = [
-    Number(rankingDraft.performance),
-    Number(rankingDraft.experience),
-    Number(rankingDraft.positionMatch),
-    Number(rankingDraft.availability),
-    Number(rankingDraft.recentTransactions),
-  ]
-  const rankingWeightTotal = rankingDraftNums.reduce((sum, n) => sum + (Number.isFinite(n) ? n : 0), 0)
-  const rankingWeightsValid =
-    rankingDraftNums.every((n) => Number.isFinite(n) && n >= 0 && n <= 100) && Math.abs(rankingWeightTotal - 100) < 0.00001
-  const rankingTargetPositionValid = Boolean(rankingDraft.targetPosition.trim())
+  const {
+    pitcherTarget: rankingPitcherTarget,
+    total: rankingWeightTotal,
+    weightsValid: rankingWeightsValid,
+    targetSelected: rankingTargetPositionValid,
+  } = rankingDraftWeightValidation(rankingDraft)
 
   function toggleTransactionType(type: DiscoveryTransactionType) {
     setTransactionTypes((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]))
@@ -677,6 +627,12 @@ export default function PlayerDiscoveryHomePage() {
             <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
               Weights must add to 100%. Applies to {searchMode === "profile" ? "this saved profile" : "custom search"}.
             </p>
+            {rankingPitcherTarget ? (
+              <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+                Pitcher target (<span className="font-mono">P</span>): position match is disabled (0%). Distribute 100%
+                across the other four fields.
+              </p>
+            ) : null}
             <div className="portal-modal-inset mt-3">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="portal-field">
@@ -713,23 +669,33 @@ export default function PlayerDiscoveryHomePage() {
                   className="portal-control"
                 />
               </label>
-              <label className="portal-field">
-                Position match (%)
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={rankingDraft.positionMatch}
-                  onChange={(e) =>
-                    setRankingDraft((prev) => ({
-                      ...prev,
-                      positionMatch: e.target.value,
-                    }))
-                  }
-                  placeholder="eg 15"
-                  className="portal-control"
-                />
-              </label>
+              <div
+                className={
+                  rankingPitcherTarget
+                    ? "opacity-50 [&_input]:cursor-not-allowed"
+                    : undefined
+                }
+              >
+                <label className="portal-field">
+                  Position match (%)
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={rankingPitcherTarget ? "" : rankingDraft.positionMatch}
+                    readOnly={rankingPitcherTarget}
+                    disabled={rankingPitcherTarget}
+                    onChange={(e) =>
+                      setRankingDraft((prev) => ({
+                        ...prev,
+                        positionMatch: e.target.value,
+                      }))
+                    }
+                    placeholder="eg 15"
+                    className="portal-control"
+                  />
+                </label>
+              </div>
               <label className="portal-field">
                 Availability (%)
                 <input
@@ -769,14 +735,30 @@ export default function PlayerDiscoveryHomePage() {
                 <select
                   value={rankingDraft.targetPosition}
                   onChange={(e) =>
-                    setRankingDraft((prev) => ({
-                      ...prev,
-                      targetPosition: e.target.value,
-                    }))
+                    setRankingDraft((prev) => {
+                      const targetPosition = e.target.value
+                      return {
+                        ...prev,
+                        targetPosition,
+                        positionMatch: isPitcherRankingTarget(targetPosition) ? "" : prev.positionMatch,
+                      }
+                    })
                   }
                   className="portal-control"
                 >
                   <option value="">Select position</option>
+                  {(() => {
+                    const raw = rankingDraft.targetPosition.trim()
+                    const known = (POSITION_FILTER_OPTIONS as readonly string[]).includes(raw)
+                    if (raw && !known) {
+                      return (
+                        <option key="__saved__" value={raw}>
+                          {raw} (saved)
+                        </option>
+                      )
+                    }
+                    return null
+                  })()}
                   {POSITION_FILTER_OPTIONS.map((pos) => (
                     <option key={pos} value={pos}>
                       {pos}

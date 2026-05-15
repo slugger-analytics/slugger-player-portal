@@ -129,9 +129,20 @@ function extractSeasonTeamName(
   return null
 }
 
-/** Parses US-style `M/D/YYYY` dates from the transaction feed to `YYYY-MM-DD`. */
+/** Parses `M/D/YYYY` or `YYYY-MM-DD` from the transaction feed to `YYYY-MM-DD`. */
 function parseUsDateToIso(s: string): string | null {
-  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s.trim())
+  const t = s.trim()
+  if (!t) return null
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t)
+  if (iso) {
+    const y = Number(iso[1])
+    const mo = Number(iso[2])
+    const d = Number(iso[3])
+    const dt = new Date(Date.UTC(y, mo - 1, d))
+    if (Number.isNaN(dt.getTime())) return null
+    return dt.toISOString().slice(0, 10)
+  }
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t)
   if (!m) return null
   const y = Number(m[3])
   const mo = Number(m[1])
@@ -223,13 +234,19 @@ export class DataParser {
       const r = rowToRecord(header, cells)
       const playerId = (r.playerid || r.playerId || "").trim()
       if (!playerId) continue
-      const dateStr = r.tranxDate || r.tranxdate || ""
+      const dateStr =
+        r.tranxDate ||
+        r.tranxdate ||
+        r.date ||
+        r.transactionDate ||
+        r.transactiondate ||
+        ""
       const iso = parseUsDateToIso(dateStr)
       if (!iso) continue
       out.push({
         playerId,
         date: iso,
-        type: (r.tranxType || r.tranxtype || "").trim() || "unknown",
+        type: (r.tranxType || r.tranxtype || r.type || "").trim() || "unknown",
         description: (r.description || "").trim(),
       })
     }

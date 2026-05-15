@@ -11,10 +11,12 @@
  */
 
 import {
+  effectiveDiscoveryTransactionTypeFilters,
   experienceLevelsAtOrAbove,
   experienceLevelsAtOrBelow,
   isExperienceLevelCode,
   isLastTransactionDaysOption,
+  type TransactionTypeFilter,
 } from "@available-player-portal/shared"
 import type { BatHand as PrismaBatHand, ExperienceLevel, ThrowHand as PrismaThrowHand } from "@prisma/client"
 import { Prisma } from "@prisma/client"
@@ -27,6 +29,41 @@ const DISCOVERY_SCAN_BATCH = 400
 const DISCOVERY_SCAN_MAX_ROWS = 200_000
 
 export class PlayerRepository {
+  /**
+   * Prisma filter for transaction rows counted toward “last X days” and recency ordering.
+   * Must stay aligned with {@link TransactionRepository} profile-visible / type-filter logic.
+   */
+  private discoveryTransactionTypeWhere(types?: TransactionTypeFilter[]): Prisma.TransactionWhereInput {
+    const cats = effectiveDiscoveryTransactionTypeFilters(types)
+    const parts: Prisma.TransactionWhereInput[] = []
+    for (const c of cats) {
+      if (c === "retired") {
+        parts.push({
+          OR: [
+            { type: { equals: "retired", mode: "insensitive" } },
+            { type: { startsWith: "retired", mode: "insensitive" } },
+          ],
+        })
+      } else if (c === "released") {
+        parts.push({
+          OR: [
+            { type: { equals: "released", mode: "insensitive" } },
+            { type: { startsWith: "released", mode: "insensitive" } },
+          ],
+        })
+      } else if (c === "freeAgent") {
+        parts.push({
+          OR: [
+            { type: { equals: "free agent", mode: "insensitive" } },
+            { type: { startsWith: "free agency", mode: "insensitive" } },
+          ],
+        })
+      }
+    }
+    if (parts.length === 0) return { playerId: { equals: "__portal_no_tx_type_match__" } }
+    return parts.length === 1 ? parts[0]! : { OR: parts }
+  }
+
   /** Flat `AND` clauses — avoids Prisma mis-combining `OR`/`NOT` (position) with `experienceLevel`. */
   private collectDiscoveryWhereClauses(
     filters: PlayerFilters,
@@ -104,7 +141,11 @@ export class PlayerRepository {
       const cutoff = new Date()
       cutoff.setTime(cutoff.getTime() - filters.lastTransactionDays * 24 * 60 * 60 * 1000)
       clauses.push({
-        transactions: { some: { date: { gte: cutoff } } },
+        transactions: {
+          some: {
+            AND: [{ date: { gte: cutoff } }, this.discoveryTransactionTypeWhere(filters.transactionTypes)],
+          },
+        },
       })
     }
     if (filters.bats != null) {
@@ -153,10 +194,11 @@ export class PlayerRepository {
   private async getPlayersByRecentTransaction(filters: PlayerFilters): Promise<Player[]> {
     const cutoff = this.transactionRecencyCutoff(filters)
     const playerWhere = this.withDiscoveryEligible(filters, { omitLastTransactionRecency: true })
+    const typeWhere = this.discoveryTransactionTypeWhere(filters.transactionTypes)
     const groups = await prisma.transaction.groupBy({
       by: ["playerId"],
       where: {
-        date: { gte: cutoff },
+        AND: [{ date: { gte: cutoff } }, typeWhere],
         player: { is: playerWhere },
       },
       _max: { date: true },

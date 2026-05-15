@@ -38,8 +38,8 @@ export class TransactionRepository {
     if (!filters || filters.length === 0) return isTransactionShownOnPlayerProfile(type)
     const n = normalizeTransactionTypeForDisplayMatch(type)
     return filters.some((f) => {
-      if (f === "retired") return n === "retired"
-      if (f === "released") return n === "released"
+      if (f === "retired") return n === "retired" || n.startsWith("retired ")
+      if (f === "released") return n === "released" || n.startsWith("released ")
       return n === "free agent" || n.startsWith("free agency")
     })
   }
@@ -149,8 +149,8 @@ export class TransactionRepository {
   /**
    * 1) Delete transactions before {@link PORTAL_TRANSACTION_MIN_DATE}.
    * 2) Recompute {@link Player.hasProfileVisibleTransaction} for every player.
-   * 3) Delete players with no profile-visible transactions OR discovery_eligible=false
-   *    (cascades stats + remaining transactions).
+   * 3) Anyone with a profile-visible transaction is marked discovery-eligible (feed beats heuristics).
+   * 4) Delete players with no profile-visible transactions (cascades stats + remaining transactions).
    * Call from sync after all upserts so FK writes succeed; cascades remove stats for deleted players.
    */
   async enforcePortalTransactionRetentionPolicy(): Promise<void> {
@@ -164,13 +164,20 @@ export class TransactionRepository {
         WHERE t.player_id = p.id
         AND (
           regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') IN ('retired', 'released', 'free agent')
+          OR regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') LIKE 'retired %'
+          OR regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') LIKE 'released %'
           OR regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') LIKE 'free agency%'
         )
       )
     `
     await prisma.$executeRaw`
+      UPDATE "Player"
+      SET discovery_eligible = true
+      WHERE has_profile_visible_transaction = true
+    `
+    await prisma.$executeRaw`
       DELETE FROM "Player"
-      WHERE has_profile_visible_transaction = false OR discovery_eligible = false
+      WHERE has_profile_visible_transaction = false
     `
   }
 
@@ -186,6 +193,8 @@ export class TransactionRepository {
           WHERE t.player_id = p.id
           AND (
             regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') IN ('retired', 'released', 'free agent')
+            OR regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') LIKE 'retired %'
+            OR regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') LIKE 'released %'
             OR regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') LIKE 'free agency%'
           )
         )
