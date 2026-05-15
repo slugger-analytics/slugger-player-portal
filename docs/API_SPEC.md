@@ -139,7 +139,16 @@ Processes raw TBC feed payloads fetched by a trusted relay. This runs the same p
 
 **Authentication:** same `Authorization: Bearer <SYNC_INTERNAL_KEY>` behavior as `/sync`.
 
-**Request body:**
+**Request bodies (one of):**
+
+```json
+{
+  "s3Bucket": "alpb-player-portal-sync",
+  "transactionsKey": "feeds/<run>/transactions.csv.gz",
+  "battingKey": "feeds/<run>/batting.csv.gz",
+  "pitchingKey": "feeds/<run>/pitching.csv.gz"
+}
+```
 
 ```json
 {
@@ -149,7 +158,9 @@ Processes raw TBC feed payloads fetched by a trusted relay. This runs the same p
 }
 ```
 
-**Response:** same counts as `/sync`, plus `"source": "raw-ingest"`.
+Keys ending in `.gz` are gunzipped transparently. `s3Bucket` defaults to `FEED_S3_BUCKET` when omitted.
+
+**Response:** same counts as `/sync`, plus `"source": "s3-ingest"` or `"raw-ingest"`.
 
 ---
 

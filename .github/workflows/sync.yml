@@ -5,6 +5,10 @@ on:
     - cron: "*/30 * * * *"
   workflow_dispatch:
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   sync:
     name: Fetch TBC feeds and relay to production
@@ -25,11 +29,20 @@ jobs:
       - name: Build shared package
         run: npm run build -w @available-player-portal/shared
 
-      - name: Fetch feeds and relay to production ingest
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-2
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: player-portal-sync-relay
+
+      - name: Fetch feeds, upload to S3, and call ingest-raw
         working-directory: apps/api
         env:
           TBC_FEED_PASSWORD: ${{ secrets.TBC_FEED_PASSWORD }}
           TBC_HTTPS_PROXY: ${{ secrets.TBC_HTTPS_PROXY }}
           SYNC_INTERNAL_KEY: ${{ secrets.SYNC_INTERNAL_KEY }}
+          FEED_S3_BUCKET: alpb-player-portal-sync
           REMOTE_SYNC_INGEST_URL: https://www.alpb-analytics.com/widgets/player-portal/api/sync/ingest-raw
+          SYNC_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
         run: npx tsx src/jobs/localRelaySync.ts

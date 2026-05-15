@@ -37,4 +37,10 @@ export const config = {
    * Example: SYNC_FORCE_CHANGED_PLAYER_IDS=181000,187959
    */
   syncForceChangedPlayerIds: parseCsvIds(process.env.SYNC_FORCE_CHANGED_PLAYER_IDS),
+  /**
+   * S3 bucket the relay job stages BaseballCube feed payloads into before
+   * triggering `/sync/ingest-raw`. Reading from S3 bypasses the ALB → Lambda
+   * 1 MB sync request limit and means the Lambda never needs egress to TBC.
+   */
+  feedS3Bucket: process.env.FEED_S3_BUCKET?.trim() ?? "",
 }

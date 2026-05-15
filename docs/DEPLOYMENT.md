@@ -44,6 +44,7 @@ Copy **`.env.example`** at the repo root and set values per environment. Minimum
 | `SYNC_INTERNAL_KEY` | API + Web (server) | Same secret on both; protects `POST /sync` and allows `POST /api/sync` to authorize |
 | `INTERNAL_API_URL` | Web (server) | If the API URL differs from `NEXT_PUBLIC_API_URL` inside your VPC (e.g. private hostname) |
 | `REMOTE_SYNC_INGEST_URL` | Sync relay | Override target for `npm run sync:relay`; defaults to production raw-ingest route |
+| `FEED_S3_BUCKET` | API + Sync relay | S3 bucket the relay stages gzipped feeds into and the Lambda reads them from |
 
 **Optional / future features** (see `.env.example`): `NEXTAUTH_*`, `SLUGGER_*`, `SMTP_*`, `VAPID_*`, `MLB_*`, `BASEBALL_CUBE_*`.
 
