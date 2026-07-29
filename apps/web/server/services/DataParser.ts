@@ -17,7 +17,11 @@
  */
 
 import { createHash } from "crypto"
-import { extractHighLevelRawCell, parseExperienceLevelFromText } from "@available-player-portal/shared"
+import {
+  extractHighLevelRawCell,
+  mergeExperienceLevels,
+  parseExperienceLevelFromText,
+} from "@available-player-portal/shared"
 
 import {
   parseBatHandFromPlayerRow,
@@ -180,15 +184,18 @@ function parseAgeCell(age: string): number | null {
  */
 export class DataParser {
   /**
-   * Builds one {@link Player} per transaction row (same feed as {@link parseTransactions}).
-   * Duplicate IDs are merged later in `mergePlayers` (sync pipeline).
+   * Builds one {@link Player} per **player id** from the transaction feed. The feed is
+   * globally date-DESC, so the first row seen for a player is the newest — its
+   * position/team/status/etc. are kept, while `experienceLevel` is folded across *all*
+   * of that player's rows (highest level reached wins). This prevents an older row from
+   * overriding a newer compound position (e.g. `SS-2B`) during `mergePlayers`.
    */
   parsePlayersFromTransactionFeed(raw: string): Player[] {
     const rows = splitFeedRows(raw)
     if (rows.length < 2) return []
     const header = parseHeaderRow(rows[0])
     const highlevelCol = findHighLevelColumnIndex(header)
-    const out: Player[] = []
+    const byId = new Map<string, Player>()
     for (let i = 1; i < rows.length; i++) {
       const cells = parseCsvLine(rows[i])
       if (cells.length < header.length) continue
@@ -197,9 +204,19 @@ export class DataParser {
       if (highlevelCol >= 0 && highlevelCol < cells.length) {
         rec.highlevel = String(cells[highlevelCol] ?? "").trim()
       }
-      out.push(this.normalizePlayer(rec))
+      const player = this.normalizePlayer(rec)
+      const prev = byId.get(player.id)
+      if (!prev) {
+        byId.set(player.id, player)
+        continue
+      }
+      // Keep the newer (first-seen) row's fields; only fold the highest level reached.
+      byId.set(player.id, {
+        ...prev,
+        experienceLevel: mergeExperienceLevels(prev.experienceLevel, player.experienceLevel),
+      })
     }
-    return out
+    return [...byId.values()]
   }
 
   /** Derives players from batting rows (name/team/position/age from stat feed). */

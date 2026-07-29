@@ -28,34 +28,7 @@ import { PlayerRepository } from "../repositories/PlayerRepository"
 import { TransactionRepository } from "../repositories/TransactionRepository"
 import { BattingStatsRepository } from "../repositories/BattingStatsRepository"
 import { PitchingStatsRepository } from "../repositories/PitchingStatsRepository"
-import { mergeExperienceLevels } from "@available-player-portal/shared"
-
-import type { Player } from "../types/models"
-
-function mergePlayers(lists: Player[][]): Player[] {
-  const map = new Map<string, Player>()
-  for (const list of lists) {
-    for (const p of list) {
-      const prev = map.get(p.id)
-      if (!prev) {
-        map.set(p.id, { ...p })
-        continue
-      }
-      const merged: Player = {
-        ...prev,
-        ...p,
-        name: p.name && p.name !== "Unknown" ? p.name : prev.name,
-        team: p.team && p.team !== "—" ? p.team : prev.team,
-        position: p.position && p.position !== "—" ? p.position : prev.position,
-        status: p.status !== "available" ? p.status : prev.status,
-        age: p.age ?? prev.age,
-        experienceLevel: mergeExperienceLevels(prev.experienceLevel, p.experienceLevel),
-      }
-      map.set(p.id, merged)
-    }
-  }
-  return [...map.values()]
-}
+import { mergePlayers } from "./mergePlayers"
 
 /** Counts returned after a successful run (HTTP + CLI logging). */
 export type SyncPipelineResult = {
@@ -90,9 +63,9 @@ export async function runSyncPipeline(): Promise<SyncPipelineResult> {
   const parsedPit = parser.parsePitching(pitRaw)
 
   const playerList = mergePlayers([
-    parser.parsePlayersFromTransactionFeed(tranxRaw),
-    parser.parsePlayersFromBattingFeed(batRaw),
-    parser.parsePlayersFromPitchingFeed(pitRaw),
+    { players: parser.parsePlayersFromTransactionFeed(tranxRaw), positionAuthoritative: true },
+    { players: parser.parsePlayersFromBattingFeed(batRaw), positionAuthoritative: false },
+    { players: parser.parsePlayersFromPitchingFeed(pitRaw), positionAuthoritative: false },
   ])
 
   await players.upsertPlayers(playerList)
