@@ -81,6 +81,12 @@ async function processRawFeeds(rawFeeds: SyncPipelineRawFeeds): Promise<SyncPipe
   await players.upsertPlayers(playerList)
   // Upsert all parsed transaction lines (same as web sync); repository skips unknown player ids.
   await txs.upsertTransactions(parsedTx)
+  // Recompute profile-visible flags for the players we just touched so newly-born rows
+  // (default has_profile_visible_transaction=false) become discoverable within this run,
+  // not only via the end-of-run retention pass. Repository chunks ids at 4000.
+  await txs.refreshHasProfileVisibleTransactionForPlayerIds([
+    ...new Set(parsedTx.map((t) => t.playerId)),
+  ])
   await batting.upsertStats(filteredBat)
   await pitching.upsertStats(filteredPit)
   await txs.enforcePortalTransactionRetentionPolicy()
