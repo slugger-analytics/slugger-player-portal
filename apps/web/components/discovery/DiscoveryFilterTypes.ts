@@ -2,6 +2,7 @@
  * Discovery filter row model + query helper shared by home (custom) and Preferences (profiles).
  */
 
+import { EXPERIENCE_LEVEL_OPTIONS } from "@available-player-portal/shared"
 import type { BatHand, ThrowHand } from "@available-player-portal/shared"
 
 export type FilterKind =
@@ -100,6 +101,68 @@ export const POSITION_FILTER_OPTIONS = [
   "1B-3B",
   "DH",
 ] as const
+
+/**
+ * Experience-level range direction. The UiFilter only ever stores `experienceLevelMinRaw` /
+ * `experienceLevelMaxRaw` (backward compatible); the direction is derived from which of those
+ * are present, so saved profiles always round-trip without a new field.
+ */
+export type ExperienceLevelDirection = "atLeast" | "atMost" | "between" | "exactly"
+
+export const EXPERIENCE_LEVEL_DIRECTION_OPTIONS: { value: ExperienceLevelDirection; label: string }[] = [
+  { value: "atLeast", label: "At least (level+)" },
+  { value: "atMost", label: "At most (up to level)" },
+  { value: "between", label: "Between" },
+  { value: "exactly", label: "Exactly" },
+]
+
+/** Derive the direction selector from stored raw min/max (backward compatible with saved profiles). */
+export function experienceLevelDirectionFromRaw(minRaw?: string, maxRaw?: string): ExperienceLevelDirection {
+  const min = (minRaw ?? "").trim()
+  const max = (maxRaw ?? "").trim()
+  if (min && max) return min === max ? "exactly" : "between"
+  if (max) return "atMost"
+  return "atLeast"
+}
+
+/** Reconcile the stored min/max values when the user switches direction (keeps a sensible carry-over). */
+export function reconcileExperienceLevelForDirection(
+  direction: ExperienceLevelDirection,
+  minRaw?: string,
+  maxRaw?: string,
+): { min: string; max: string } {
+  const min = (minRaw ?? "").trim()
+  const max = (maxRaw ?? "").trim()
+  const primary = min || max
+  switch (direction) {
+    case "atLeast":
+      return { min: primary, max: "" }
+    case "atMost":
+      return { min: "", max: max || min }
+    case "exactly":
+      return { min: primary, max: primary }
+    case "between":
+      return { min, max }
+  }
+}
+
+/** Human label for a stored experience-level range: `AAA+`, `Up to AAA`, `A to AAA`, or `Exactly AAA`. */
+export function experienceLevelRangeLabel(minRaw?: string, maxRaw?: string): string {
+  const min = (minRaw ?? "").trim()
+  const max = (maxRaw ?? "").trim()
+  if (!min && !max) return "Select range"
+  const labelOf = (code: string) => EXPERIENCE_LEVEL_OPTIONS.find((o) => o.code === code)?.label ?? code
+  switch (experienceLevelDirectionFromRaw(min, max)) {
+    case "atLeast":
+      return `${labelOf(min)}+`
+    case "atMost":
+      return `Up to ${labelOf(max)}`
+    case "exactly":
+      return `Exactly ${labelOf(min)}`
+    case "between":
+      return `${labelOf(min)} to ${labelOf(max)}`
+  }
+}
 
 export function filtersToQuery(filters: UiFilter[]): Record<string, string | number | boolean | undefined> {
   const q: Record<string, string | number | boolean | undefined> = {}

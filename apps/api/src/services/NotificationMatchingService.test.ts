@@ -18,6 +18,19 @@ test("filtersJsonToQuery maps basic filters and flags", () => {
   assert.equal(query.sortDir, "desc")
 })
 
+test("filtersJsonToQuery passes experience-level min and max through so level saved searches are honored", () => {
+  const query = filtersJsonToQuery(
+    [
+      { field: "experienceLevelMin", value: "AAA" },
+      { field: "experienceLevel", value: "MLB" },
+    ],
+    false,
+    null,
+  )
+  assert.equal(query.experienceLevelMin, "AAA")
+  assert.equal(query.experienceLevel, "MLB")
+})
+
 test("filtersJsonToQuery maps ranking preferences", () => {
   const query = filtersJsonToQuery([], false, {
     weights: {

@@ -10,8 +10,13 @@ import { useState } from "react"
 import {
   ADD_PREFERENCE_OPTIONS,
   defaultUiFilterForPreset,
+  EXPERIENCE_LEVEL_DIRECTION_OPTIONS,
+  experienceLevelDirectionFromRaw,
+  experienceLevelRangeLabel,
   newId,
   POSITION_FILTER_OPTIONS,
+  reconcileExperienceLevelForDirection,
+  type ExperienceLevelDirection,
   type FilterKind,
   type UiFilter,
 } from "@/components/discovery/DiscoveryFilterTypes"
@@ -50,6 +55,22 @@ export function FilterModal({
         ? (initial.rawValue ?? "")
         : "",
   )
+  const [expDirection, setExpDirection] = useState<ExperienceLevelDirection>(
+    experienceLevelDirectionFromRaw(
+      initial.kind === "experienceLevel"
+        ? initial.experienceLevelMinRaw
+        : initial.kind === "experienceLevelMin"
+          ? initial.rawValue
+          : undefined,
+      initial.kind === "experienceLevel" ? (initial.experienceLevelMaxRaw ?? initial.rawValue) : undefined,
+    ),
+  )
+  function changeExpDirection(next: ExperienceLevelDirection) {
+    const { min, max } = reconcileExperienceLevelForDirection(next, expMin, expMax)
+    setExpMin(min)
+    setExpMax(max)
+    setExpDirection(next)
+  }
   const [lastTxDays, setLastTxDays] = useState(
     initial.kind === "lastTransactionDays" ? (initial.rawValue ?? "") : "",
   )
@@ -80,18 +101,10 @@ export function FilterModal({
       const min = expMin.trim()
       const max = expMax.trim()
       if (!min && !max) return { id, kind, label: "Experience level: Select range", rawValue: "" }
-      const minOpt = min ? EXPERIENCE_LEVEL_OPTIONS.find((o) => o.code === min) : undefined
-      const maxOpt = max ? EXPERIENCE_LEVEL_OPTIONS.find((o) => o.code === max) : undefined
-      const label =
-        min && max
-          ? `Experience level: ${minOpt?.label ?? min} to ${maxOpt?.label ?? max}`
-          : min
-            ? `Experience level: ${minOpt?.label ?? min}+`
-            : `Experience level: Up to ${maxOpt?.label ?? max}`
       return {
         id,
         kind,
-        label,
+        label: `Experience level: ${experienceLevelRangeLabel(min, max)}`,
         rawValue: max,
         experienceLevelMinRaw: min || undefined,
         experienceLevelMaxRaw: max || undefined,
@@ -243,37 +256,86 @@ export function FilterModal({
           ) : null}
 
           {kind === "experienceLevel" ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-3">
               <label className="portal-field">
-                Min experience level
+                Direction
                 <select
                   className="portal-control"
-                  value={expMin}
-                  onChange={(e) => setExpMin(e.target.value)}
+                  value={expDirection}
+                  onChange={(e) => changeExpDirection(e.target.value as ExperienceLevelDirection)}
                 >
-                  <option value="">Any</option>
-                  {EXPERIENCE_LEVEL_OPTIONS.map((o) => (
-                    <option key={o.code} value={o.code}>
+                  {EXPERIENCE_LEVEL_DIRECTION_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
                       {o.label}
                     </option>
                   ))}
                 </select>
               </label>
-              <label className="portal-field">
-                Max experience level
-                <select
-                  className="portal-control"
-                  value={expMax}
-                  onChange={(e) => setExpMax(e.target.value)}
-                >
-                  <option value="">Any</option>
-                  {EXPERIENCE_LEVEL_OPTIONS.map((o) => (
-                    <option key={o.code} value={o.code}>
-                      {o.label}
+
+              {expDirection === "between" ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="portal-field">
+                    Min level
+                    <select
+                      className="portal-control"
+                      value={expMin}
+                      onChange={(e) => setExpMin(e.target.value)}
+                    >
+                      <option value="">Any</option>
+                      {EXPERIENCE_LEVEL_OPTIONS.map((o) => (
+                        <option key={o.code} value={o.code}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="portal-field">
+                    Max level
+                    <select
+                      className="portal-control"
+                      value={expMax}
+                      onChange={(e) => setExpMax(e.target.value)}
+                    >
+                      <option value="">Any</option>
+                      {EXPERIENCE_LEVEL_OPTIONS.map((o) => (
+                        <option key={o.code} value={o.code}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              ) : (
+                <label className="portal-field">
+                  Level
+                  <select
+                    className="portal-control"
+                    value={expDirection === "atMost" ? expMax : expMin}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      if (expDirection === "atMost") {
+                        setExpMax(v)
+                        setExpMin("")
+                      } else if (expDirection === "exactly") {
+                        setExpMin(v)
+                        setExpMax(v)
+                      } else {
+                        setExpMin(v)
+                        setExpMax("")
+                      }
+                    }}
+                  >
+                    <option value="" disabled hidden>
+                      Select
                     </option>
-                  ))}
-                </select>
-              </label>
+                    {EXPERIENCE_LEVEL_OPTIONS.map((o) => (
+                      <option key={o.code} value={o.code}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
           ) : null}
 
