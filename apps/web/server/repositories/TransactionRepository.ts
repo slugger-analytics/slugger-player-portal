@@ -11,13 +11,14 @@
 
 import {
   isTransactionShownOnPlayerProfile,
-  normalizeTransactionTypeForDisplayMatch,
+  transactionTypeMatchesFamilies,
   type TransactionTypeFilter,
 } from "@available-player-portal/shared"
 import { createHash } from "crypto"
 import { Prisma } from "@prisma/client"
 import type { Transaction } from "../types/models"
 import { prisma } from "../lib/prisma"
+import { profileVisibleTransactionTypeSql } from "./profileVisibleTransactionSql"
 
 /** Max player ids per `WHERE id IN (...)` refresh — PG bind-variable limit is ~32k. */
 const REFRESH_PROFILE_TX_PLAYER_CHUNK = 4000
@@ -36,12 +37,7 @@ function uniqueHash(t: Transaction): string {
 export class TransactionRepository {
   private matchesTransactionTypeFilter(type: string, filters?: TransactionTypeFilter[]): boolean {
     if (!filters || filters.length === 0) return isTransactionShownOnPlayerProfile(type)
-    const n = normalizeTransactionTypeForDisplayMatch(type)
-    return filters.some((f) => {
-      if (f === "retired") return n === "retired" || n.startsWith("retired ")
-      if (f === "released") return n === "released" || n.startsWith("released ")
-      return n === "free agent" || n.startsWith("free agency")
-    })
+    return transactionTypeMatchesFamilies(type, filters)
   }
 
   private async existingPlayerIds(playerIds: string[]): Promise<Set<string>> {
@@ -157,19 +153,14 @@ export class TransactionRepository {
     await prisma.$executeRaw`
       DELETE FROM "Transaction" WHERE date < ${PORTAL_TRANSACTION_MIN_DATE}::date
     `
-    await prisma.$executeRaw`
+    await prisma.$executeRaw(Prisma.sql`
       UPDATE "Player" p
       SET has_profile_visible_transaction = EXISTS (
         SELECT 1 FROM "Transaction" t
         WHERE t.player_id = p.id
-        AND (
-          regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') IN ('retired', 'released', 'free agent')
-          OR regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') LIKE 'retired %'
-          OR regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') LIKE 'released %'
-          OR regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') LIKE 'free agency%'
-        )
+        AND (${profileVisibleTransactionTypeSql()})
       )
-    `
+    `)
     await prisma.$executeRaw`
       UPDATE "Player"
       SET discovery_eligible = true
@@ -186,20 +177,15 @@ export class TransactionRepository {
     const unique = [...new Set(playerIds)]
     for (let i = 0; i < unique.length; i += REFRESH_PROFILE_TX_PLAYER_CHUNK) {
       const chunk = unique.slice(i, i + REFRESH_PROFILE_TX_PLAYER_CHUNK)
-      await prisma.$executeRaw`
+      await prisma.$executeRaw(Prisma.sql`
         UPDATE "Player" p
         SET has_profile_visible_transaction = EXISTS (
           SELECT 1 FROM "Transaction" t
           WHERE t.player_id = p.id
-          AND (
-            regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') IN ('retired', 'released', 'free agent')
-            OR regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') LIKE 'retired %'
-            OR regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') LIKE 'released %'
-            OR regexp_replace(lower(trim(both from t.type)), '\s+', ' ', 'g') LIKE 'free agency%'
-          )
+          AND (${profileVisibleTransactionTypeSql()})
         )
         WHERE p.id IN (${Prisma.join(chunk.map((id) => Prisma.sql`${id}`))})
-      `
+      `)
     }
   }
 }

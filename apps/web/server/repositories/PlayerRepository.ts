@@ -16,6 +16,7 @@ import {
   experienceLevelsAtOrBelow,
   isExperienceLevelCode,
   isLastTransactionDaysOption,
+  PROFILE_VISIBLE_TRANSACTION_TYPE_RULES,
   type TransactionTypeFilter,
 } from "@available-player-portal/shared"
 import type { BatHand as PrismaBatHand, ExperienceLevel, ThrowHand as PrismaThrowHand } from "@prisma/client"
@@ -37,28 +38,14 @@ export class PlayerRepository {
     const cats = effectiveDiscoveryTransactionTypeFilters(types)
     const parts: Prisma.TransactionWhereInput[] = []
     for (const c of cats) {
-      if (c === "retired") {
-        parts.push({
-          OR: [
-            { type: { equals: "retired", mode: "insensitive" } },
-            { type: { startsWith: "retired", mode: "insensitive" } },
-          ],
-        })
-      } else if (c === "released") {
-        parts.push({
-          OR: [
-            { type: { equals: "released", mode: "insensitive" } },
-            { type: { startsWith: "released", mode: "insensitive" } },
-          ],
-        })
-      } else if (c === "freeAgent") {
-        parts.push({
-          OR: [
-            { type: { equals: "free agent", mode: "insensitive" } },
-            { type: { startsWith: "free agency", mode: "insensitive" } },
-          ],
-        })
-      }
+      const rules = PROFILE_VISIBLE_TRANSACTION_TYPE_RULES[c]
+      parts.push({
+        OR: rules.map((r) =>
+          r.kind === "exact"
+            ? { type: { equals: r.value, mode: "insensitive" } }
+            : { type: { startsWith: r.value, mode: "insensitive" } },
+        ),
+      })
     }
     if (parts.length === 0) return { playerId: { equals: "__portal_no_tx_type_match__" } }
     return parts.length === 1 ? parts[0]! : { OR: parts }
