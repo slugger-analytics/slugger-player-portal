@@ -117,13 +117,21 @@ export interface PlayerFilters {
    */
   sortDir?: "asc" | "desc"
   /**
-   * Rolling window from now: only players with at least one **matching** transaction whose `date`
-   * falls in `[now − N days, now]`. Matching uses the same families as discovery transaction types
-   * ({@link TransactionTypeFilter} / defaults: retired, released, free agent) — not every feed line.
-   * List order is by most recent **matching** transaction first (then name).
-   * Allowed values: {@link LAST_TRANSACTION_DAYS_OPTIONS}.
+   * Window anchored on {@link asOfDate}: only players with at least one **matching** transaction
+   * whose `date` falls in `[asOfDate − N days, asOfDate]`, both ends inclusive. Matching uses the
+   * same families as discovery transaction types ({@link TransactionTypeFilter} / defaults:
+   * retired, released, free agent) — not every feed line. List order is by most recent **matching**
+   * transaction first (then name). Allowed values: {@link LAST_TRANSACTION_DAYS_OPTIONS}.
    */
   lastTransactionDays?: number
+  /**
+   * As-of anchor for {@link lastTransactionDays}, `YYYY-MM-DD`, interpreted as a UTC calendar date.
+   * Window is `[asOfDate − lastTransactionDays, asOfDate]`, **both ends inclusive** (mirrors TBC
+   * “Transaction Date” + “Last X Days”). Ignored when `lastTransactionDays` is absent. Omitted ⇒
+   * today (UTC), which reproduces the previous rolling behaviour exactly.
+   * Query: `asOfDate`, `asOf`, `transactionDate`, `tranxDate`.
+   */
+  asOfDate?: string
   /** Optional profile-visible transaction type filter used by discovery sorting/filtering. */
   transactionTypes?: TransactionTypeFilter[]
   /** Exact match on {@link Player.bats} (L, R, B). Query: `bats`. */

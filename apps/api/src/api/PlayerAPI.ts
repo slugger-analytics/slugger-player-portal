@@ -4,7 +4,8 @@
  *
  * **Routes (mounted at `/players` in `index.ts`):**
  * - `GET /` — query: `experienceLevel` (exact enum only), `experience_level`, `highlevel`, `highLevel`,
- *   `lastTransactionDays` (7 | 14 | 21 | 30 | 45 | 60), …
+ *   `lastTransactionDays` (7 | 14 | 21 | 30 | 45 | 60), `asOfDate` (also `asOf`, `transactionDate`,
+ *   `tranxDate`) — anchors that window on a calendar date instead of today, …
  * - `GET /:id` — full `PlayerProfile` (stats + embedded transactions)
  * - `GET /:id/transactions` — `Transaction[]` only (used by the web timeline component)
  *
@@ -30,6 +31,7 @@ import type { PlayerFilters } from "../types/models"
 import { PlayerDataService } from "../services/PlayerDataService"
 import { PlayerRepository } from "../repositories/PlayerRepository"
 import { TransactionRepository } from "../repositories/TransactionRepository"
+import { parseAsOfDateInput } from "../repositories/transactionWindow"
 
 const playerData = new PlayerDataService()
 const playersRepo = new PlayerRepository()
@@ -92,8 +94,11 @@ function parseRankingPreferencesQuery(query: Record<string, unknown>): RankingPr
   }
 }
 
-/** Maps `req.query` into {@link PlayerFilters}; throws if `ageMin`/`ageMax` are invalid. */
-function parseFilters(query: Record<string, unknown>): PlayerFilters {
+/**
+ * Maps `req.query` into {@link PlayerFilters}; throws if `ageMin`/`ageMax` are invalid.
+ * @internal — exported for contract tests only.
+ */
+export function parseFilters(query: Record<string, unknown>): PlayerFilters {
   const position = firstString(query.position)
   const status = firstString(query.status)
   const team = firstString(query.team)
@@ -199,6 +204,16 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     lastTransactionDays = n
   }
 
+  const { value: asOfDate, invalidRaw: asOfInvalid } = parseAsOfDateQuery(query)
+  if (asOfInvalid) {
+    throw new Error(`Invalid asOfDate: ${asOfInvalid}`)
+  }
+  if (asOfDate != null && lastTransactionDays == null) {
+    // 400 rather than a silent ignore: an anchor alone would return an unwindowed list that looks
+    // like the anchor did not work.
+    throw new Error("Invalid asOfDate: requires lastTransactionDays")
+  }
+
   let bats: PlayerFilters["bats"]
   const batsRaw = firstString(query.bats)
   if (batsRaw != null && batsRaw !== "") {
@@ -235,6 +250,7 @@ function parseFilters(query: Record<string, unknown>): PlayerFilters {
     sortBy,
     sortDir,
     lastTransactionDays,
+    asOfDate,
     transactionTypes,
     bats,
     throws,
@@ -268,6 +284,22 @@ function parseMinExperienceLevelQuery(query: Record<string, unknown>): {
     const raw = firstString(query[key])
     if (raw == null || raw.trim() === "") continue
     const parsed = parseExperienceLevelFilterInput(raw)
+    if (parsed) return { value: parsed, invalidRaw: undefined }
+    return { value: undefined, invalidRaw: raw }
+  }
+  return { value: undefined, invalidRaw: undefined }
+}
+
+/** As-of anchor for `lastTransactionDays`: UI sends `asOfDate`; TBC-style URLs use `tranxDate`. */
+function parseAsOfDateQuery(query: Record<string, unknown>): {
+  value: string | undefined
+  invalidRaw: string | undefined
+} {
+  const keys = ["asOfDate", "asOf", "transactionDate", "tranxDate"] as const
+  for (const key of keys) {
+    const raw = firstString(query[key])
+    if (raw == null || raw.trim() === "") continue
+    const parsed = parseAsOfDateInput(raw)
     if (parsed) return { value: parsed, invalidRaw: undefined }
     return { value: undefined, invalidRaw: raw }
   }

@@ -15,7 +15,6 @@ import {
   experienceLevelsAtOrAbove,
   experienceLevelsAtOrBelow,
   isExperienceLevelCode,
-  isLastTransactionDaysOption,
   PROFILE_VISIBLE_TRANSACTION_TYPE_RULES,
   type TransactionTypeFilter,
 } from "@available-player-portal/shared"
@@ -25,6 +24,8 @@ import type { Player, PlayerFilters } from "../types/models"
 import { prisma } from "../lib/prisma"
 import { SYNC_UPSERT_CHUNK } from "../lib/syncBatch"
 import { isPlayerDiscoveryEligible } from "../utils/playerEligibility"
+import { buildPositionWhereClauses } from "./positionFilter"
+import { transactionWindow } from "./transactionWindow"
 
 export class PlayerRepository {
   /**
@@ -62,20 +63,7 @@ export class PlayerRepository {
       clauses.push({ name: { contains: nameQ.slice(0, 200), mode: "insensitive" } })
     }
     if (filters.position) {
-      const raw = filters.position.trim()
-      const fp = raw.toLowerCase()
-      const pitcherMatch: Prisma.PlayerWhereInput[] = [
-        { position: { contains: "Pitch", mode: "insensitive" } },
-        { position: { equals: "p", mode: "insensitive" } },
-        { position: { startsWith: "p-", mode: "insensitive" } },
-      ]
-      if (fp === "non-p") {
-        clauses.push({ NOT: { OR: pitcherMatch } })
-      } else if (fp === "p" || fp.includes("pitch")) {
-        clauses.push({ OR: pitcherMatch })
-      } else {
-        clauses.push({ position: { contains: raw, mode: "insensitive" } })
-      }
+      clauses.push(...buildPositionWhereClauses(filters.position))
     }
     if (filters.status) {
       clauses.push({ status: filters.status as string })
@@ -123,15 +111,14 @@ export class PlayerRepository {
       })
     }
     if (opts?.omitLastTransactionRecency !== true && filters.lastTransactionDays != null) {
-      if (!isLastTransactionDaysOption(filters.lastTransactionDays)) {
-        throw new Error(`Invalid lastTransactionDays: ${filters.lastTransactionDays}`)
-      }
-      const cutoff = new Date()
-      cutoff.setTime(cutoff.getTime() - filters.lastTransactionDays * 24 * 60 * 60 * 1000)
+      const w = transactionWindow(filters)
       clauses.push({
         transactions: {
           some: {
-            AND: [{ date: { gte: cutoff } }, this.discoveryTransactionTypeWhere(filters.transactionTypes)],
+            AND: [
+              { date: { gte: w.gte, lte: w.lte } },
+              this.discoveryTransactionTypeWhere(filters.transactionTypes),
+            ],
           },
         },
       })
@@ -162,27 +149,19 @@ export class PlayerRepository {
     return this.combineWhereClauses(clauses)
   }
 
-  private transactionRecencyCutoff(filters: PlayerFilters): Date {
-    const n = filters.lastTransactionDays!
-    if (!isLastTransactionDaysOption(n)) {
-      throw new Error(`Invalid lastTransactionDays: ${n}`)
-    }
-    const cutoff = new Date()
-    cutoff.setTime(cutoff.getTime() - n * 24 * 60 * 60 * 1000)
-    return cutoff
-  }
-
   /**
    * `findMany` cannot order by max(transaction.date); use grouped transactions then hydrate players.
+   * `_max` is taken over the **windowed** rows, so the list orders by newest matching transaction
+   * inside the window rather than newest overall (which is TBC’s ordering under an anchor).
    */
   private async getPlayersByRecentTransaction(filters: PlayerFilters): Promise<Player[]> {
-    const cutoff = this.transactionRecencyCutoff(filters)
+    const w = transactionWindow(filters)
     const playerWhere = this.withDiscoveryEligible(filters, { omitLastTransactionRecency: true })
     const typeWhere = this.discoveryTransactionTypeWhere(filters.transactionTypes)
     const groups = await prisma.transaction.groupBy({
       by: ["playerId"],
       where: {
-        AND: [{ date: { gte: cutoff } }, typeWhere],
+        AND: [{ date: { gte: w.gte, lte: w.lte } }, typeWhere],
         player: { is: playerWhere },
       },
       _max: { date: true },

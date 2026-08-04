@@ -46,6 +46,8 @@ export function filtersJsonToQuery(
     }
     if (rank.targetPosition?.trim()) out.rankTargetPosition = rank.targetPosition.trim()
   }
+  // Alerts are standing queries: a pinned as-of anchor would freeze a saved profile's window forever.
+  delete out.asOfDate
   out.sortBy = "recentProfileTransaction"
   out.sortDir = "desc"
   return out

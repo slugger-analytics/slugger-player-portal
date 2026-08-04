@@ -31,6 +31,19 @@ test("filtersJsonToQuery passes experience-level min and max through so level sa
   assert.equal(query.experienceLevel, "MLB")
 })
 
+test("saved profiles never freeze their alert window on a stored as-of anchor", () => {
+  const query = filtersJsonToQuery(
+    [
+      { field: "lastTransactionDays", value: 30 },
+      { field: "asOfDate", value: "2026-07-26" },
+    ],
+    false,
+    null,
+  )
+  assert.equal(query.lastTransactionDays, 30)
+  assert.equal(query.asOfDate, undefined, "a pinned anchor would stop this user's alerts forever")
+})
+
 test("filtersJsonToQuery maps ranking preferences", () => {
   const query = filtersJsonToQuery([], false, {
     weights: {

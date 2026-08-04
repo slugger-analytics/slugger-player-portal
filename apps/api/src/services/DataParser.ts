@@ -156,6 +156,11 @@ function parseUsDateToIso(s: string): string | null {
   return dt.toISOString().slice(0, 10)
 }
 
+/** Feed date cell lookup — shared so the two transaction-feed parsers can never key off different columns. */
+function transactionDateCell(r: Record<string, string>): string {
+  return r.tranxDate || r.tranxdate || r.date || r.transactionDate || r.transactiondate || ""
+}
+
 /** Maps TBC `statusshort` (e.g. Active, Free Agt) to portal `Player.status` values. */
 function mapStatusShort(statusshort: string): Player["status"] {
   const u = statusshort.toLowerCase()
@@ -184,18 +189,19 @@ function parseAgeCell(age: string): number | null {
  */
 export class DataParser {
   /**
-   * Builds one {@link Player} per **player id** from the transaction feed. The feed is
-   * globally date-DESC, so the first row seen for a player is the newest — its
-   * position/team/status/etc. are kept, while `experienceLevel` is folded across *all*
-   * of that player's rows (highest level reached wins). This prevents an older row from
-   * overriding a newer compound position (e.g. `SS-2B`) during `mergePlayers`.
+   * Builds one {@link Player} per **player id** from the transaction feed. The row with the
+   * greatest `tranx date` wins for position/team/status/etc.; first-seen breaks ties (so a
+   * date-DESC feed behaves exactly as before), and an undated or malformed row never displaces a
+   * dated winner. `experienceLevel` is folded across *all* of that player's rows regardless of
+   * which one wins (highest level reached). This prevents an older row from overriding a newer
+   * compound position (e.g. `SS-2B`) during `mergePlayers`.
    */
   parsePlayersFromTransactionFeed(raw: string): Player[] {
     const rows = splitFeedRows(raw)
     if (rows.length < 2) return []
     const header = parseHeaderRow(rows[0])
     const highlevelCol = findHighLevelColumnIndex(header)
-    const byId = new Map<string, Player>()
+    const byId = new Map<string, { player: Player; date: string | null }>()
     for (let i = 1; i < rows.length; i++) {
       const cells = parseCsvLine(rows[i])
       if (cells.length < header.length) continue
@@ -205,18 +211,21 @@ export class DataParser {
         rec.highlevel = String(cells[highlevelCol] ?? "").trim()
       }
       const player = this.normalizePlayer(rec)
+      const rowDate = parseUsDateToIso(transactionDateCell(r))
       const prev = byId.get(player.id)
       if (!prev) {
-        byId.set(player.id, player)
+        byId.set(player.id, { player, date: rowDate })
         continue
       }
-      // Keep the newer (first-seen) row's fields; only fold the highest level reached.
+      // ISO dates sort lexicographically; strict `>` keeps the first-seen row on a tie.
+      const experienceLevel = mergeExperienceLevels(prev.player.experienceLevel, player.experienceLevel)
+      const takeNew = rowDate != null && (prev.date == null || rowDate > prev.date)
       byId.set(player.id, {
-        ...prev,
-        experienceLevel: mergeExperienceLevels(prev.experienceLevel, player.experienceLevel),
+        player: { ...(takeNew ? player : prev.player), experienceLevel },
+        date: takeNew ? rowDate : prev.date,
       })
     }
-    return [...byId.values()]
+    return [...byId.values()].map((v) => v.player)
   }
 
   /** Derives players from batting rows (name/team/position/age from stat feed). */
@@ -251,13 +260,7 @@ export class DataParser {
       const r = rowToRecord(header, cells)
       const playerId = (r.playerid || r.playerId || "").trim()
       if (!playerId) continue
-      const dateStr =
-        r.tranxDate ||
-        r.tranxdate ||
-        r.date ||
-        r.transactionDate ||
-        r.transactiondate ||
-        ""
+      const dateStr = transactionDateCell(r)
       const iso = parseUsDateToIso(dateStr)
       if (!iso) continue
       out.push({

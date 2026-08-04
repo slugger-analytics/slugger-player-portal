@@ -29,6 +29,7 @@ import { BattingStatsRepository } from "../repositories/BattingStatsRepository"
 import { PitchingStatsRepository } from "../repositories/PitchingStatsRepository"
 import { PlayerRepository } from "../repositories/PlayerRepository"
 import { TransactionRepository } from "../repositories/TransactionRepository"
+import { resolveTransactionWindowFilters } from "../repositories/transactionWindow"
 import { pickStatArrayForLine, StatLineService } from "./StatLineService"
 
 /**
@@ -50,8 +51,13 @@ export class PlayerDataService {
     return players
   }
 
-  /** List + total row count for `GET /players` pagination (`limit` / `offset`). */
-  async listPlayerSummariesWithTotal(filters: PlayerFilters): Promise<PlayerSummariesResponse> {
+  /**
+   * List + total row count for `GET /players` pagination (`limit` / `offset`).
+   * The transaction window anchor is resolved **here and only here**, so the clock is read once per
+   * request and the count and the list can never be computed against two different windows.
+   */
+  async listPlayerSummariesWithTotal(input: PlayerFilters): Promise<PlayerSummariesResponse> {
+    const filters = resolveTransactionWindowFilters(input)
     if (filters.sortBy === "rankScore") {
       return this.listPlayerSummariesByRanking(filters)
     }
@@ -65,7 +71,7 @@ export class PlayerDataService {
       this.players.countPlayers(filters),
       this.players.getPlayers(filters),
     ])
-    const players = await this.buildPlayerSummariesBatch(list, filters.transactionTypes)
+    const players = await this.buildPlayerSummariesBatch(list, filters.transactionTypes, filters.asOfDate)
     return { players, total }
   }
 
@@ -124,7 +130,7 @@ export class PlayerDataService {
     const [battingById, pitchingById, txById] = await Promise.all([
       this.batting.getStatsByPlayerIds(ids),
       this.pitching.getStatsByPlayerIds(ids),
-      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids, filters.transactionTypes),
+      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids, filters.transactionTypes, filters.asOfDate),
     ])
     const rankingInput = list.map((p) => {
       const batting = battingById.get(p.id) ?? []
@@ -199,9 +205,9 @@ export class PlayerDataService {
     const [battingById, pitchingById, txById] = await Promise.all([
       this.batting.getStatsByPlayerIds(ids),
       this.pitching.getStatsByPlayerIds(ids),
-      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids, filters.transactionTypes),
+      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids, filters.transactionTypes, filters.asOfDate),
     ])
-    const summaries = await this.buildPlayerSummariesBatch(list, filters.transactionTypes)
+    const summaries = await this.buildPlayerSummariesBatch(list, filters.transactionTypes, filters.asOfDate)
     const rankingInput = list.map((p) => {
       const batting = battingById.get(p.id) ?? []
       const pitching = pitchingById.get(p.id) ?? []
@@ -266,7 +272,7 @@ export class PlayerDataService {
     const candidates = await this.players.listPlayerIdAndNameMatching(filters)
     if (candidates.length === 0) return { players: [], total: 0 }
     const ids = candidates.map((c) => c.id)
-    const txMap = await this.transactions.getMaxTransactionDatesByPlayerIds(ids, filters.transactionTypes)
+    const txMap = await this.transactions.getMaxTransactionDatesByPlayerIds(ids, filters.transactionTypes, filters.asOfDate)
     const sorted =
       filters.sortBy === "lastName"
         ? [...candidates].sort((a, b) => {
@@ -304,7 +310,7 @@ export class PlayerDataService {
             filters,
           )
         : undefined
-    const players = await this.buildPlayerSummariesBatch(list, filters.transactionTypes)
+    const players = await this.buildPlayerSummariesBatch(list, filters.transactionTypes, filters.asOfDate)
     if (rankingMeta) {
       for (const s of players) {
         const meta = rankingMeta.get(s.id)
@@ -342,16 +348,18 @@ export class PlayerDataService {
     )
   }
 
+  /** `asOfDate` keeps discovery card dates inside the anchored window; omit it off the list paths. */
   private async buildPlayerSummariesBatch(
     list: Player[],
     transactionTypes?: TransactionTypeFilter[],
+    asOfDate?: string,
   ): Promise<PlayerSummary[]> {
     if (list.length === 0) return []
     const ids = list.map((p) => p.id)
     const [battingById, pitchingById, recentTxById] = await Promise.all([
       this.batting.getStatsByPlayerIds(ids),
       this.pitching.getStatsByPlayerIds(ids),
-      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids, transactionTypes),
+      this.transactions.getMostRecentProfileTransactionsByPlayerIds(ids, transactionTypes, asOfDate),
     ])
     return list.map((p) => {
       const tx = recentTxById.get(p.id)

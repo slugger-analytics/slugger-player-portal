@@ -19,6 +19,7 @@ import { Prisma } from "@prisma/client"
 import type { Transaction } from "../types/models"
 import { prisma } from "../lib/prisma"
 import { SYNC_UPSERT_CHUNK } from "../lib/syncBatch"
+import { pickMostRecentByPlayer } from "./mostRecentTransaction"
 import { profileVisibleTransactionTypeSql } from "./profileVisibleTransactionSql"
 
 /** Max player ids per `WHERE id IN (...)` refresh — PG bind-variable limit is ~32k. */
@@ -58,15 +59,22 @@ export class TransactionRepository {
   /**
    * Max transaction `date` per player among rows that appear on the player profile
    * ({@link isTransactionShownOnPlayerProfile}) — same filter as {@link getTransactionsByPlayer}.
+   * `asOfDate` (`YYYY-MM-DD`, inclusive) caps rows to a discovery window anchor; omit it elsewhere.
+   * The date always equals {@link getMostRecentProfileTransactionsByPlayerIds}’ for the same inputs
+   * (max over a string date is commutative); only the accompanying *type* was ever ambiguous.
    */
   async getMaxTransactionDatesByPlayerIds(
     playerIds: string[],
     transactionTypes?: TransactionTypeFilter[],
+    asOfDate?: string,
   ): Promise<Map<string, string>> {
     const out = new Map<string, string>()
     if (playerIds.length === 0) return out
     const rows = await prisma.transaction.findMany({
-      where: { playerId: { in: playerIds } },
+      where: {
+        playerId: { in: playerIds },
+        ...(asOfDate ? { date: { lte: new Date(`${asOfDate}T23:59:59.999Z`) } } : {}),
+      },
       select: { playerId: true, date: true, type: true },
     })
     for (const r of rows) {
@@ -78,23 +86,30 @@ export class TransactionRepository {
     return out
   }
 
+  /**
+   * Newest profile-visible transaction per player. Winner is the max over `(date desc, id desc)` —
+   * the same total order as {@link getTransactionsByPlayer} — so the search-result card and the
+   * profile page cannot disagree when a player has two transactions on one date.
+   */
   async getMostRecentProfileTransactionsByPlayerIds(
     playerIds: string[],
     transactionTypes?: TransactionTypeFilter[],
+    asOfDate?: string,
   ): Promise<Map<string, { date: string; type: string }>> {
-    const out = new Map<string, { date: string; type: string }>()
-    if (playerIds.length === 0) return out
+    if (playerIds.length === 0) return new Map<string, { date: string; type: string }>()
     const rows = await prisma.transaction.findMany({
-      where: { playerId: { in: playerIds } },
-      select: { playerId: true, date: true, type: true },
+      where: {
+        playerId: { in: playerIds },
+        ...(asOfDate ? { date: { lte: new Date(`${asOfDate}T23:59:59.999Z`) } } : {}),
+      },
+      select: { playerId: true, id: true, date: true, type: true },
+      orderBy: [{ date: "desc" }, { id: "desc" }],
     })
-    for (const r of rows) {
-      if (!this.matchesTransactionTypeFilter(r.type, transactionTypes)) continue
-      const d = r.date.toISOString().slice(0, 10)
-      const prev = out.get(r.playerId)
-      if (!prev || d > prev.date) out.set(r.playerId, { date: d, type: r.type })
-    }
-    return out
+    return pickMostRecentByPlayer(
+      rows,
+      (t) => this.matchesTransactionTypeFilter(t, transactionTypes),
+      asOfDate,
+    )
   }
 
   /**

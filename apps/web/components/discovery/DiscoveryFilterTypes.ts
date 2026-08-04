@@ -32,6 +32,8 @@ export type UiFilter = {
    */
   bats?: BatHand
   throws?: ThrowHand
+  /** ISO YYYY-MM-DD anchor for the lastTransactionDays window (TBC “Transaction Date”). Blank/absent = today. */
+  asOfDateRaw?: string
 }
 
 export function newId(): string {
@@ -183,7 +185,12 @@ export function filtersToQuery(filters: UiFilter[]): Record<string, string | num
     if (f.kind === "experienceLevelMin" && f.rawValue) q.experienceLevelMin = f.rawValue
     if (f.kind === "lastTransactionDays" && f.rawValue) {
       const n = Number(f.rawValue)
-      if (Number.isInteger(n)) q.lastTransactionDays = n
+      if (Number.isInteger(n)) {
+        q.lastTransactionDays = n
+        // Nested inside the days guard: the API rejects an anchor without a window.
+        const asOf = (f.asOfDateRaw ?? "").trim()
+        if (/^\d{4}-\d{2}-\d{2}$/.test(asOf)) q.asOfDate = asOf
+      }
     }
     if (f.kind === "handedness") {
       if (f.bats != null) q.bats = f.bats

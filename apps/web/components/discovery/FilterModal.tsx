@@ -74,6 +74,9 @@ export function FilterModal({
   const [lastTxDays, setLastTxDays] = useState(
     initial.kind === "lastTransactionDays" ? (initial.rawValue ?? "") : "",
   )
+  const [asOfDate, setAsOfDate] = useState(
+    initial.kind === "lastTransactionDays" ? (initial.asOfDateRaw ?? "") : "",
+  )
   const [batHand, setBatHand] = useState(
     initial.kind === "handedness" ? (initial.bats ?? "any") : "any",
   )
@@ -114,7 +117,15 @@ export function FilterModal({
     if (kind === "lastTransactionDays") {
       const v = lastTxDays.trim()
       if (!v) return { id, kind, label: "Last X days: Select", rawValue: "" }
-      return { id, kind, label: `Last ${v} days`, rawValue: v }
+      const asOf = asOfDate.trim()
+      // Spread conditionally so a blank anchor leaves the key absent and saved profiles round-trip byte-stable.
+      return {
+        id,
+        kind,
+        label: asOf ? `Last ${v} days as of ${asOf}` : `Last ${v} days`,
+        rawValue: v,
+        ...(asOf ? { asOfDateRaw: asOf } : {}),
+      }
     }
     if (kind === "handedness") {
       const b = batHand.trim()
@@ -340,27 +351,48 @@ export function FilterModal({
           ) : null}
 
           {kind === "lastTransactionDays" ? (
-            <label className="portal-field">
-              Last X days
-              <select
-                className="portal-control"
-                value={lastTxDays}
-                onChange={(e) => setLastTxDays(e.target.value)}
-              >
-                <option value="" disabled hidden>
-                  Select
-                </option>
-                {LAST_TRANSACTION_DAYS_OPTIONS.map((d) => (
-                  <option key={d} value={String(d)}>
-                    {d}
+            <div className="space-y-3">
+              <label className="portal-field">
+                Last X days
+                <select
+                  className="portal-control"
+                  value={lastTxDays}
+                  onChange={(e) => setLastTxDays(e.target.value)}
+                >
+                  <option value="" disabled hidden>
+                    Select
                   </option>
-                ))}
-                {lastTxDays &&
-                !LAST_TRANSACTION_DAYS_OPTIONS.some((d) => String(d) === lastTxDays) ? (
-                  <option value={lastTxDays}>{lastTxDays}</option>
-                ) : null}
-              </select>
-            </label>
+                  {LAST_TRANSACTION_DAYS_OPTIONS.map((d) => (
+                    <option key={d} value={String(d)}>
+                      {d}
+                    </option>
+                  ))}
+                  {lastTxDays &&
+                  !LAST_TRANSACTION_DAYS_OPTIONS.some((d) => String(d) === lastTxDays) ? (
+                    <option value={lastTxDays}>{lastTxDays}</option>
+                  ) : null}
+                </select>
+              </label>
+              <label className="portal-field">
+                As of date (optional)
+                <input
+                  type="date"
+                  className="portal-control"
+                  value={asOfDate}
+                  onChange={(e) => setAsOfDate(e.target.value)}
+                />
+                <span className="text-xs opacity-70">
+                  Leave blank for today. Matches The Baseball Cube&rsquo;s &ldquo;Transaction
+                  Date&rdquo; — the window is the X days ending on this date, inclusive. Search
+                  results only: saved alerts always use today.
+                </span>
+              </label>
+              {asOfDate ? (
+                <button type="button" className="portal-btn-ghost" onClick={() => setAsOfDate("")}>
+                  Clear as of date
+                </button>
+              ) : null}
+            </div>
           ) : null}
 
           {kind === "handedness" ? (
