@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client"
 import { PlayerDataService } from "./PlayerDataService"
 import { NotificationEmailService } from "./NotificationEmailService"
 import { prisma } from "../lib/prisma"
+import { filtersToQuery, parseStoredFilters } from "@available-player-portal/shared"
 
 type MatchInput = {
   syncRunKey: string
@@ -18,22 +19,23 @@ function parseCsvIds(value: string | undefined): string[] {
     .filter(Boolean)
 }
 
+/**
+ * Turn a saved profile's stored filter rows into the query its alerts evaluate.
+ *
+ * This used to read a `{field, value}` shape. The web has never produced one — it POSTs
+ * `UiFilter` rows (`{id, kind, label, rawValue, …}`) and the API stores `req.body.filters`
+ * verbatim — so every filter was skipped and the query collapsed to
+ * `{sortBy, sortDir}`, i.e. every discovery-eligible player. Measured against live data:
+ * 3657 matches instead of the 8 the saved filters select, so each sync mailed a user a line
+ * for every changed player in the league regardless of what they had asked to watch. The
+ * three unit tests passed because they hand-built the shape the product never sends.
+ */
 export function filtersJsonToQuery(
   filters: unknown,
   onlyWithStats: boolean,
   rankingPreferences: unknown,
 ): ProfileFilters {
-  const out: ProfileFilters = {}
-  if (Array.isArray(filters)) {
-    for (const item of filters) {
-      if (item && typeof item === "object") {
-        const field = String((item as { field?: unknown }).field ?? "")
-        const value = (item as { value?: unknown }).value
-        if (!field || value == null || value === "") continue
-        out[field] = typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : String(value)
-      }
-    }
-  }
+  const out: ProfileFilters = { ...filtersToQuery(parseStoredFilters(filters)) }
   if (onlyWithStats) out.hasStats = true
   if (rankingPreferences && typeof rankingPreferences === "object") {
     const rank = rankingPreferences as { weights?: Record<string, number>; targetPosition?: string }
@@ -46,7 +48,9 @@ export function filtersJsonToQuery(
     }
     if (rank.targetPosition?.trim()) out.rankTargetPosition = rank.targetPosition.trim()
   }
-  // Alerts are standing queries: a pinned as-of anchor would freeze a saved profile's window forever.
+  // Alerts are standing queries, so the window has to travel with time: keep
+  // lastTransactionDays and drop the anchor the user pinned when they saved the
+  // profile, which would otherwise freeze the alert on that date forever.
   delete out.asOfDate
   out.sortBy = "recentProfileTransaction"
   out.sortDir = "desc"

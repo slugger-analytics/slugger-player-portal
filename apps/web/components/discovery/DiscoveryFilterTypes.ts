@@ -3,38 +3,13 @@
  */
 
 import { EXPERIENCE_LEVEL_OPTIONS } from "@available-player-portal/shared"
-import type { BatHand, ThrowHand } from "@available-player-portal/shared"
+import type { BatHand, ThrowHand, FilterKind, UiFilter } from "@available-player-portal/shared"
 
-export type FilterKind =
-  | "position"
-  | "age"
-  | "team"
-  | "status"
-  | "experienceLevel"
-  /** Backward compatibility for older saved profiles; new UI uses a single range row. */
-  | "experienceLevelMin"
-  | "lastTransactionDays"
-  | "handedness"
-
-export type UiFilter = {
-  id: string
-  kind: FilterKind
-  label: string
-  rawValue?: string
-  ageMode?: "lt" | "gt"
-  ageValue?: number
-  /** For `experienceLevel` range row. */
-  experienceLevelMinRaw?: string
-  experienceLevelMaxRaw?: string
-  /**
-   * When {@link FilterKind} is `handedness`: set one or both. Omitted side means “any”
-   * (no filter on that column).
-   */
-  bats?: BatHand
-  throws?: ThrowHand
-  /** ISO YYYY-MM-DD anchor for the lastTransactionDays window (TBC “Transaction Date”). Blank/absent = today. */
-  asOfDateRaw?: string
-}
+// FilterKind, UiFilter and filtersToQuery live in the shared package: a saved
+// profile stores these rows verbatim and the API's alert matcher has to turn the
+// same rows back into a query, so a second copy here is a copy that drifts.
+export type { FilterKind, UiFilter } from "@available-player-portal/shared"
+export { filtersToQuery } from "@available-player-portal/shared"
 
 export function newId(): string {
   return globalThis.crypto.randomUUID()
@@ -166,36 +141,3 @@ export function experienceLevelRangeLabel(minRaw?: string, maxRaw?: string): str
   }
 }
 
-export function filtersToQuery(filters: UiFilter[]): Record<string, string | number | boolean | undefined> {
-  const q: Record<string, string | number | boolean | undefined> = {}
-  for (const f of filters) {
-    if (f.kind === "position" && f.rawValue) q.position = f.rawValue
-    if (f.kind === "team" && f.rawValue) q.team = f.rawValue
-    if (f.kind === "status" && f.rawValue) q.status = f.rawValue
-    if (f.kind === "age" && f.ageMode && f.ageValue != null) {
-      if (f.ageMode === "lt") q.ageMax = f.ageValue
-      if (f.ageMode === "gt") q.ageMin = f.ageValue
-    }
-    if (f.kind === "experienceLevel") {
-      const max = f.experienceLevelMaxRaw ?? f.rawValue
-      const min = f.experienceLevelMinRaw
-      if (max) q.experienceLevel = max
-      if (min) q.experienceLevelMin = min
-    }
-    if (f.kind === "experienceLevelMin" && f.rawValue) q.experienceLevelMin = f.rawValue
-    if (f.kind === "lastTransactionDays" && f.rawValue) {
-      const n = Number(f.rawValue)
-      if (Number.isInteger(n)) {
-        q.lastTransactionDays = n
-        // Nested inside the days guard: the API rejects an anchor without a window.
-        const asOf = (f.asOfDateRaw ?? "").trim()
-        if (/^\d{4}-\d{2}-\d{2}$/.test(asOf)) q.asOfDate = asOf
-      }
-    }
-    if (f.kind === "handedness") {
-      if (f.bats != null) q.bats = f.bats
-      if (f.throws != null) q.throws = f.throws
-    }
-  }
-  return q
-}
