@@ -89,6 +89,27 @@ test("LIKE wildcards in the query cannot widen the filter", () => {
   }
 })
 
+test("every emitted clause is a value Postgres will accept", () => {
+  // A sentinel written as a literal NUL shipped a 500: Postgres rejects 0x00 in a
+  // string with `invalid byte sequence for encoding "UTF8"`, so the "match nothing"
+  // clause failed the query instead of returning no rows.
+  const values = (clause: unknown): string[] => {
+    if (Array.isArray(clause)) return clause.flatMap(values)
+    if (clause == null || typeof clause !== "object") {
+      return typeof clause === "string" ? [clause] : []
+    }
+    return Object.values(clause as Record<string, unknown>).flatMap(values)
+  }
+  for (const requested of ["%", "_", "2B", "2B-SS", "Non-P", "P"]) {
+    for (const v of values(buildPositionWhereClauses(requested))) {
+      assert.ok(
+        !/[\u0000-\u001f]/.test(v),
+        `${requested} emitted a control character: ${JSON.stringify(v)}`,
+      )
+    }
+  }
+})
+
 test("a wildcard request is empty, not an error, and real positions still work", () => {
   assert.equal(buildPositionWhereClauses("%").length, 1)
   assert.deepStrictEqual(buildPositionWhereClauses("2B"), [
