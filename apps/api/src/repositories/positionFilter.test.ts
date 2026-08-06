@@ -110,8 +110,9 @@ test("a single-token option matches exactly the rows that play it", () => {
   for (const option of DROPDOWN_OPTIONS) {
     if (option === "P" || option === "Non-P" || option.includes("-")) continue
     for (const stored of STORED_POSITIONS) {
-      const shouldMatch =
-        storedHasToken(stored, option) || stored.toLowerCase() === spellings[option]
+      const spelled: string | undefined = spellings[option]
+      const shouldMatch: boolean =
+        storedHasToken(stored, option) || stored.toLowerCase() === spelled
       assert.equal(
         matchesAll(option, stored),
         shouldMatch,
