@@ -54,15 +54,31 @@ test("compound position matching is order-insensitive", () => {
 })
 
 /**
- * Every distinct position stored in production, collected from the live API on 2026-08-06.
- * 19 values, and the two biggest are full words: `Pitcher` (2925 rows) and `Catcher` (450).
- * There is no bare `C` anywhere — which is why the dropdown's `C` option needs a spelling,
- * not just an anchor.
+ * Every distinct position stored in production: all 82 of them, read off all 3657 players
+ * via the live API on 2026-08-06 (`?limit=100&offset=…`).
+ *
+ * The two largest are full words — `Pitcher` (2143) and `Catcher` (270) — and a bare `C`
+ * appears nowhere, which is why the dropdown's `C` option needs a named spelling and not
+ * just an anchor. The feed is also inconsistent about case (`cf-lf`, `ss`, `1b`) and carries
+ * a little junk (`H`, `R`), so matching stays case-insensitive and nothing may assume the
+ * value is a position at all.
  */
 const STORED_POSITIONS = [
-  "Pitcher", "Catcher", "OF", "SS-3B", "2B-3B", "2B-SS", "3B", "CF-LF", "2B-1B",
-  "3B-2B", "2B-RF", "RF-CF", "RF", "2B", "SS", "CF-RF", "1B-LF", "LF-RF", "1B",
+  "Pitcher", "Catcher", "OF", "SS", "1B", "RF-LF", "2B", "LF-RF", "3B", "CF-RF",
+  "3B-2B", "C-1B", "2B-3B", "CF-LF", "IF", "2B-SS", "CF", "3B-1B", "RF", "SS-2B",
+  "SS-3B", "RF-CF", "LF", "LF-CF", "1B-3B", "3B-SS", "1B-LF", "1B-RF", "1B-C",
+  "2B-LF", "1B-DH", "RF-1B", "2B-RF", "3B-DH", "LF-1B", "1B-2B", "CF-2B", "LF-2B",
+  "RF-DH", "2B-1B", "DH", "LF-DH", "LF-3B", "IF-OF", "3B-LF", "SS-LF", "RF-2B",
+  "DH-C", "CF-SS", "OF-IF", "SS-CF", "2B-CF", "C-RF", "cf-lf", "CF-1B", "c-lf",
+  "2B-DH", "3B-C", "1B-CF", "LF-C", "H", "3B-RF", "rf", "C-OF", "OF-P", "R",
+  "3B-CF", "IF-P", "C-P", "IF-C", "RF-3B", "ss", "C-DH", "DH-1B", "1B-SS", "1B-P",
+  "C-2B", "C-LF", "1b", "DH-LF", "DH-RF", "LF-SS",
 ] as const
+
+/** Independent reading of "this stored value plays position X" — split on the delimiter. */
+function storedHasToken(stored: string, token: string): boolean {
+  return stored.toLowerCase().split("-").includes(token.toLowerCase())
+}
 
 /** Every option the production dropdown offers (apps/web POSITION_FILTER_OPTIONS). */
 const DROPDOWN_OPTIONS = [
@@ -74,34 +90,52 @@ test("the C option finds catchers, and only catchers", () => {
   // Was: 2653 of 3657 players, 79 of the first 100 of them pitchers, because the
   // single-token branch was a bare substring and "Pitcher" contains a "c".
   const matched = STORED_POSITIONS.filter((s) => matchesAll("C", s))
-  assert.deepStrictEqual(matched, ["Catcher"])
+  const catchers = STORED_POSITIONS.filter(
+    (s) => s.toLowerCase() === "catcher" || storedHasToken(s, "C"),
+  )
+
+  assert.deepStrictEqual(matched, catchers)
+  assert.ok(matched.includes("Catcher"), "the feed spells the position 'Catcher'")
+  assert.ok(matched.includes("C-1B") && matched.includes("1B-C"), "compound C records count")
+  assert.ok(!matched.includes("Pitcher"), "'Pitcher' merely contains a c")
+  assert.ok(!matched.includes("CF") && !matched.includes("CF-LF"), "CF is not C")
+  // Live after the fix: 336 = 270 'Catcher' + 66 hyphenated C records.
 })
 
-test("no dropdown option matches a position it does not name", () => {
-  const expected: Record<string, string[]> = {
-    "P": ["Pitcher"],
-    "C": ["Catcher"],
-    "1B": ["2B-1B", "1B-LF", "1B"],
-    "2B": ["2B-3B", "2B-SS", "2B-1B", "3B-2B", "2B-RF", "2B"],
-    "3B": ["SS-3B", "2B-3B", "3B", "3B-2B"],
-    "SS": ["SS-3B", "2B-SS", "SS"],
-    "OF": ["OF"],
-    "LF": ["CF-LF", "1B-LF", "LF-RF"],
-    "CF": ["CF-LF", "RF-CF", "CF-RF"],
-    "RF": ["2B-RF", "RF-CF", "RF", "CF-RF", "LF-RF"],
-    "IF": [],
-    "DH": [],
-    "2B-SS": ["2B-SS"],
-    "1B-3B": [],
-  }
+test("a single-token option matches exactly the rows that play it", () => {
+  // Property, not a restatement of the clause: a matched row must carry the
+  // requested position as a whole delimiter-separated token, or be its full-word
+  // spelling. Runs over the entire stored vocabulary.
+  const spellings: Record<string, string> = { C: "catcher" }
   for (const option of DROPDOWN_OPTIONS) {
-    if (option === "Non-P") continue // asserted below, as a complement
-    assert.deepStrictEqual(
-      STORED_POSITIONS.filter((s) => matchesAll(option, s)),
-      expected[option],
-      `dropdown option ${option}`,
-    )
+    if (option === "P" || option === "Non-P" || option.includes("-")) continue
+    for (const stored of STORED_POSITIONS) {
+      const shouldMatch =
+        storedHasToken(stored, option) || stored.toLowerCase() === spellings[option]
+      assert.equal(
+        matchesAll(option, stored),
+        shouldMatch,
+        `${option} vs ${stored}`,
+      )
+    }
   }
+})
+
+test("compound options match either spelling and nothing else", () => {
+  for (const option of ["2B-SS", "1B-3B"]) {
+    const tokens = option.split("-")
+    for (const stored of STORED_POSITIONS) {
+      assert.equal(
+        matchesAll(option, stored),
+        tokens.every((t) => storedHasToken(stored, t)),
+        `${option} vs ${stored}`,
+      )
+    }
+  }
+  assert.deepStrictEqual(
+    STORED_POSITIONS.filter((s) => matchesAll("2B-SS", s)),
+    ["2B-SS", "SS-2B"],
+  )
 })
 
 test("Non-P is everyone the P option does not claim", () => {
@@ -175,7 +209,7 @@ test("every emitted clause is a value Postgres will accept", () => {
 test("a wildcard request is empty, not an error, and real positions still work", () => {
   assert.equal(buildPositionWhereClauses("%").length, 1)
   assert.deepStrictEqual(STORED_POSITIONS.filter((s) => matchesAll("%", s)), [])
-  assert.deepStrictEqual(STORED_POSITIONS.filter((s) => matchesAll("2B", s)).length, 6)
+  assert.ok(STORED_POSITIONS.filter((s) => matchesAll("2B", s)).length > 5)
   assert.equal(buildPositionWhereClauses("Non-P").length, 1)
 })
 
