@@ -3,12 +3,14 @@
  * @description Position clause builder for discovery, extracted from {@link PlayerRepository} so
  * the matching rules are unit-testable without a database.
  *
- * **Single token** (`2B`, `SS`, `C`, …) keeps the legacy substring match, which is what makes a
- * `2B` request match `SS-2B`, `1B-2B`, `2B-LF` etc. exactly like TBC. **Compound** input
- * (`2B-SS`) is matched token-by-token so it is order-insensitive: `2B-SS` and `SS-2B` are stored
- * both ways in the feed, and requesting one used to silently drop every row spelled the other way.
- * Each token is delimiter-anchored (`equals` / `<tok>-` / `-<tok>` / `-<tok>-`) rather than a bare
- * substring, so a `C-1B` request cannot leak into the stored `CF-1B`.
+ * Every token — single or compound — is delimiter-anchored (`equals` / `<tok>-` / `-<tok>` /
+ * `-<tok>-`), so a `2B` request still matches `SS-2B`, `1B-2B`, `2B-LF` the way TBC does, while a
+ * `C` request cannot leak into `CF-LF` or `Pitcher`. **Compound** input (`2B-SS`) is matched
+ * token-by-token so it is order-insensitive: the feed stores `2B-SS` and `SS-2B` both ways, and
+ * requesting one used to silently drop every row spelled the other way.
+ *
+ * A few positions are stored as full words rather than the abbreviation the UI ships; those are
+ * listed in {@link POSITION_SPELLINGS}.
  */
 
 import { Prisma } from "@prisma/client"
@@ -32,14 +34,40 @@ const PITCHER_MATCH: Prisma.PlayerWhereInput[] = [
   { position: { startsWith: "p-", mode: "insensitive" } },
 ]
 
+/**
+ * Full-word spellings the feed uses for a position the UI ships as an abbreviation.
+ *
+ * Measured across every distinct stored value in production (19 of them): catchers are stored as
+ * the word **`Catcher`** — a bare `C` appears nowhere — while `Pitcher`, 2925 rows, merely
+ * *contains* a "c". Under the old bare-substring match, the dropdown's `C` option therefore
+ * returned **2653 of 3657 players**, 79 of the first 100 of them pitchers. Anchoring alone would
+ * have swung it the other way and matched no catchers at all, so the spelling has to be named.
+ *
+ * `P` / `Non-P` are handled by {@link PITCHER_MATCH} before tokenising.
+ */
+const POSITION_SPELLINGS: Record<string, readonly string[]> = {
+  c: ["Catcher"],
+}
+
+/** The delimiter-anchored alternatives for one token of a stored position (`SS-2B`, `2B`, …). */
+function tokenAlternatives(tok: string): Prisma.PlayerWhereInput[] {
+  return [
+    { position: { equals: tok, mode: "insensitive" } },
+    { position: { startsWith: `${tok}-`, mode: "insensitive" } },
+    { position: { endsWith: `-${tok}`, mode: "insensitive" } },
+    { position: { contains: `-${tok}-`, mode: "insensitive" } },
+  ]
+}
+
 /** Whole-token match against a hyphen-delimited stored position (`SS-2B`, `2B`, `CF-2B`, …). */
 function tokenClause(tok: string): Prisma.PlayerWhereInput {
+  const spellings = POSITION_SPELLINGS[tok.toLowerCase()] ?? []
   return {
     OR: [
-      { position: { equals: tok, mode: "insensitive" } },
-      { position: { startsWith: `${tok}-`, mode: "insensitive" } },
-      { position: { endsWith: `-${tok}`, mode: "insensitive" } },
-      { position: { contains: `-${tok}-`, mode: "insensitive" } },
+      ...tokenAlternatives(tok),
+      ...spellings.map((word) => ({
+        position: { equals: word, mode: "insensitive" as const },
+      })),
     ],
   }
 }
@@ -58,6 +86,5 @@ export function buildPositionWhereClauses(rawInput: string): Prisma.PlayerWhereI
   if (fp === "p" || fp.includes("pitch")) return [{ OR: PITCHER_MATCH }]
   const tokens = [...new Set(raw.split("-").map((t) => t.trim()).filter(Boolean))]
   if (!tokens.every((t) => POSITION_TOKEN.test(t))) return [MATCHES_NOTHING]
-  if (tokens.length > 1) return tokens.map(tokenClause)
-  return [{ position: { contains: raw, mode: "insensitive" } }]
+  return tokens.map(tokenClause)
 }

@@ -53,13 +53,75 @@ test("compound position matching is order-insensitive", () => {
   )
 })
 
-test("single-token positions keep the legacy contains clause byte-for-byte", () => {
+/**
+ * Every distinct position stored in production, collected from the live API on 2026-08-06.
+ * 19 values, and the two biggest are full words: `Pitcher` (2925 rows) and `Catcher` (450).
+ * There is no bare `C` anywhere — which is why the dropdown's `C` option needs a spelling,
+ * not just an anchor.
+ */
+const STORED_POSITIONS = [
+  "Pitcher", "Catcher", "OF", "SS-3B", "2B-3B", "2B-SS", "3B", "CF-LF", "2B-1B",
+  "3B-2B", "2B-RF", "RF-CF", "RF", "2B", "SS", "CF-RF", "1B-LF", "LF-RF", "1B",
+] as const
+
+/** Every option the production dropdown offers (apps/web POSITION_FILTER_OPTIONS). */
+const DROPDOWN_OPTIONS = [
+  "P", "Non-P", "C", "1B", "2B", "3B", "SS", "OF", "LF", "CF", "RF", "IF",
+  "2B-SS", "1B-3B", "DH",
+] as const
+
+test("the C option finds catchers, and only catchers", () => {
+  // Was: 2653 of 3657 players, 79 of the first 100 of them pitchers, because the
+  // single-token branch was a bare substring and "Pitcher" contains a "c".
+  const matched = STORED_POSITIONS.filter((s) => matchesAll("C", s))
+  assert.deepStrictEqual(matched, ["Catcher"])
+})
+
+test("no dropdown option matches a position it does not name", () => {
+  const expected: Record<string, string[]> = {
+    "P": ["Pitcher"],
+    "C": ["Catcher"],
+    "1B": ["2B-1B", "1B-LF", "1B"],
+    "2B": ["2B-3B", "2B-SS", "2B-1B", "3B-2B", "2B-RF", "2B"],
+    "3B": ["SS-3B", "2B-3B", "3B", "3B-2B"],
+    "SS": ["SS-3B", "2B-SS", "SS"],
+    "OF": ["OF"],
+    "LF": ["CF-LF", "1B-LF", "LF-RF"],
+    "CF": ["CF-LF", "RF-CF", "CF-RF"],
+    "RF": ["2B-RF", "RF-CF", "RF", "CF-RF", "LF-RF"],
+    "IF": [],
+    "DH": [],
+    "2B-SS": ["2B-SS"],
+    "1B-3B": [],
+  }
+  for (const option of DROPDOWN_OPTIONS) {
+    if (option === "Non-P") continue // asserted below, as a complement
+    assert.deepStrictEqual(
+      STORED_POSITIONS.filter((s) => matchesAll(option, s)),
+      expected[option],
+      `dropdown option ${option}`,
+    )
+  }
+})
+
+test("Non-P is everyone the P option does not claim", () => {
+  const pitchers = STORED_POSITIONS.filter((s) => matchesAll("P", s))
+  const nonPitchers = STORED_POSITIONS.filter((s) => matchesAll("Non-P", s))
+
+  assert.deepStrictEqual(nonPitchers, STORED_POSITIONS.filter((s) => !pitchers.includes(s)))
+  assert.ok(nonPitchers.includes("Catcher"))
+})
+
+test("single tokens are anchored the same way compound tokens are", () => {
   assert.deepStrictEqual(buildPositionWhereClauses("2B"), [
-    { position: { contains: "2B", mode: "insensitive" } },
-  ])
-  // Pinned deliberately: `C` still matches `CF` / `Catcher`; “improving” that is a behaviour change.
-  assert.deepStrictEqual(buildPositionWhereClauses("C"), [
-    { position: { contains: "C", mode: "insensitive" } },
+    {
+      OR: [
+        { position: { equals: "2B", mode: "insensitive" } },
+        { position: { startsWith: "2B-", mode: "insensitive" } },
+        { position: { endsWith: "-2B", mode: "insensitive" } },
+        { position: { contains: "-2B-", mode: "insensitive" } },
+      ],
+    },
   ])
 })
 
@@ -112,9 +174,8 @@ test("every emitted clause is a value Postgres will accept", () => {
 
 test("a wildcard request is empty, not an error, and real positions still work", () => {
   assert.equal(buildPositionWhereClauses("%").length, 1)
-  assert.deepStrictEqual(buildPositionWhereClauses("2B"), [
-    { position: { contains: "2B", mode: "insensitive" } },
-  ])
+  assert.deepStrictEqual(STORED_POSITIONS.filter((s) => matchesAll("%", s)), [])
+  assert.deepStrictEqual(STORED_POSITIONS.filter((s) => matchesAll("2B", s)).length, 6)
   assert.equal(buildPositionWhereClauses("Non-P").length, 1)
 })
 
